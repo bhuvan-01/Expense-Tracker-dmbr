@@ -1,0 +1,16 @@
+{
+  "profile": "product-admin",
+  "sourceRoots": ["src"],
+  "locale": "en-GB",
+  "canonicalMap": "UX-CONTRACT.md",
+  "requiredCapabilities": ["Form", "Scrollbar"],
+  "commands": {
+    "unit": "npm test",
+    "e2e": "npm run test:e2e",
+    "accessibility": "npm run test:e2e",
+    "build": "npm run build"
+  },
+  "evidence": {
+    "failurePaths": "tests/e2e/auth.spec.ts"
+  }
+}
