@@ -130,6 +130,16 @@ export function createLedger(db: Database.Database) {
         409,
         "Choose your workspace currency and timezone first.",
       );
+    if (!isCurrency(body.currency))
+      throw new LedgerError(
+        400,
+        "Send the workspace currency with this expense.",
+      );
+    if (body.currency !== prefs.currency)
+      throw new LedgerError(
+        409,
+        "Your workspace currency changed. Close the form and reload the page before saving this expense.",
+      );
     const values: ExpenseValues = {
       amount: typeof body.amount === "string" ? body.amount : "",
       date: typeof body.date === "string" ? body.date : "",
@@ -169,6 +179,7 @@ export function createLedger(db: Database.Database) {
       const fingerprint = createHash("sha256")
         .update(
           JSON.stringify([
+            body.currency,
             body.amount,
             body.date,
             body.categoryId,

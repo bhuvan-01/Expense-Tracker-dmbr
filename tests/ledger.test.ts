@@ -81,6 +81,7 @@ async function fixture(t: TestContext) {
     return response.json() as Promise<Workspace>;
   }
   const values = (categoryId: string, amount = "12.34") => ({
+    currency: "GBP",
     amount,
     date: "2026-10-28",
     categoryId,
@@ -90,6 +91,21 @@ async function fixture(t: TestContext) {
   });
   return { auth, database, request, setup, values, cookie, signup, config };
 }
+
+test("a currency change in another tab cannot reinterpret a pending expense", async (t) => {
+  const f = await fixture(t),
+    original = await f.setup();
+  const body = f.values(original.categories[0].id);
+  await f.setup("USD");
+  assert.equal((await f.request("/expenses", "POST", body)).status, 409);
+  assert.equal((await (await f.request("/expenses")).json()).total, 0);
+  const response = await f.request("/expenses", "POST", {
+    ...body,
+    currency: "USD",
+  });
+  assert.equal(response.status, 201);
+  assert.equal((await response.json()).currency, "USD");
+});
 
 test("exact amount parsing respects zero, two, and three decimal currencies", () => {
   assert.equal(parseAmount("0.10", "GBP"), 10);
@@ -298,9 +314,14 @@ test("private records and categories cannot be read, changed, deleted, or assign
   );
   assert.equal(
     (
-      await f.request("/expenses", "POST", f.values(one.categories[0].id), {
-        cookie: other,
-      })
+      await f.request(
+        "/expenses",
+        "POST",
+        { ...f.values(one.categories[0].id), currency: "USD" },
+        {
+          cookie: other,
+        },
+      )
     ).status,
     400,
   );

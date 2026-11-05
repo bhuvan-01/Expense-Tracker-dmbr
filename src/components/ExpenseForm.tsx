@@ -89,7 +89,7 @@ export function ExpenseForm({
       document.getElementById(`expense-${first}`)?.focus();
       return;
     }
-    const body = { ...values, version: expense?.version };
+    const body = { ...values, currency, version: expense?.version };
     const snapshot = JSON.stringify(body);
     if (request.current.snapshot && request.current.snapshot !== snapshot)
       request.current.id = crypto.randomUUID();

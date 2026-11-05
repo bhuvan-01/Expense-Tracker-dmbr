@@ -75,7 +75,7 @@ All endpoints require a valid session. Mutations/search require `Content-Type: a
 | `PATCH /api/expenses/:id` | Edit with the current numeric `version` |
 | `DELETE /api/expenses/:id` | Delete with the current numeric `version` |
 
-Expense body: `amount` as a decimal string, ISO `date`, owned `categoryId`, optional `merchant`, `paymentMethod` and `note`. Creates return 201, identical safe retries 200, stale edits/deletes 409, missing or unowned IDs 404, invalid fields 400, and expired sessions 401. A retry after an uncertain create reuses the same key and details. The editor freezes these details until retry or discard to avoid duplicate records.
+Expense body: `currency` matching the confirmed workspace, `amount` as a decimal string, ISO `date`, owned `categoryId`, optional `merchant`, `paymentMethod` and `note`. Creates return 201, identical safe retries 200, stale edits/deletes or a changed workspace currency 409, missing or unowned IDs 404, invalid fields 400, and expired sessions 401. A retry after an uncertain create reuses the same key and details. The editor freezes these details until retry or discard to avoid duplicate records. A workspace currency change in another tab must never silently reinterpret the entered amount.
 
 ## Production setup
 

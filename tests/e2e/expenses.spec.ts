@@ -240,6 +240,7 @@ test("edit conflicts, delete failures and expired sessions keep recovery availab
   const update = await page.request.patch(`/api/expenses/${expense.id}`, {
     headers: { Origin: new URL(page.url()).origin },
     data: {
+      currency: expense.currency,
       amount: "11.00",
       date: expense.date,
       categoryId: expense.categoryId,
@@ -307,6 +308,7 @@ test("pagination, empty results and failed history requests recover without losi
         "Idempotency-Key": crypto.randomUUID(),
       },
       data: {
+        currency: workspace.preferences.currency,
         amount: "1.00",
         date: "2026-10-28",
         categoryId: workspace.categories[0].id,
