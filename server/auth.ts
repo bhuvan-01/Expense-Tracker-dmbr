@@ -3,6 +3,7 @@ import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { PASSWORD_MIN, PASSWORD_MAX } from "../src/lib/validation.js";
+import { initializeLedger } from "./ledger.js";
 
 export type AuthConfig = {
   databasePath: string;
@@ -67,5 +68,6 @@ export async function createAuthentication(config: AuthConfig) {
   // Additive, library-owned migrations. Never resets existing accounts.
   const migrations = await getMigrations(auth.options);
   await migrations.runMigrations();
+  initializeLedger(database);
   return { auth, database };
 }

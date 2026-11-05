@@ -3,10 +3,16 @@ import helmet from "helmet";
 import { fromNodeHeaders, toNodeHandler } from "better-auth/node";
 import { resolve } from "node:path";
 import type { createAuthentication } from "./auth.js";
+import type Database from "better-sqlite3";
+import { ledgerRoutes } from "./ledger-routes.js";
 
 type Authentication = Awaited<ReturnType<typeof createAuthentication>>;
 
-export function createApp(auth: Authentication["auth"], production = false) {
+export function createApp(
+  auth: Authentication["auth"],
+  database: Database.Database,
+  production = false,
+) {
   const app = express();
   app.disable("x-powered-by");
   // Explicit proxy networks only; never blindly trust client-supplied forwarding headers.
@@ -56,6 +62,7 @@ export function createApp(auth: Authentication["auth"], production = false) {
       },
     });
   });
+  app.use("/api", ledgerRoutes(auth, database));
   app.use("/api", (_req, res) => res.status(404).json({ error: "Not found." }));
   app.use(["/app", "/app/{*path}"], async (req, res, next) => {
     const session = await auth.api.getSession({

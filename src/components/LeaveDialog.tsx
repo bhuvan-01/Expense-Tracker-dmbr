@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { Dialog } from "./Dialog";
 
 export function LeaveDialog({
   destination,
@@ -9,21 +9,13 @@ export function LeaveDialog({
   onCancel: () => void;
   onDiscard: () => void;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    if (destination) ref.current?.showModal();
-    else ref.current?.close();
-  }, [destination]);
   return (
-    <dialog
-      ref={ref}
+    <Dialog
+      open={Boolean(destination)}
       className="leave-dialog"
-      aria-labelledby="leave-title"
-      aria-describedby="leave-description"
-      onCancel={(event) => {
-        event.preventDefault();
-        onCancel();
-      }}
+      titleId="leave-title"
+      descriptionId="leave-description"
+      onRequestClose={onCancel}
     >
       <h2 id="leave-title">Leave this form?</h2>
       <p id="leave-description">The details you've entered will be cleared.</p>
@@ -40,6 +32,6 @@ export function LeaveDialog({
           Discard changes
         </button>
       </div>
-    </dialog>
+    </Dialog>
   );
 }
