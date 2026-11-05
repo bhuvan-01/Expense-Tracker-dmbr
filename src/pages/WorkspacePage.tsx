@@ -1,24 +1,49 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  ArrowRight,
-  Check,
-  CircleCheck,
   LoaderCircle,
   LogOut,
+  Plus,
+  ReceiptText,
   ShieldCheck,
+  Settings2,
 } from "lucide-react";
 import { Brand } from "../components/Brand";
 import { authClient } from "../lib/auth-client";
+import { api } from "../lib/api";
+import type { Category, Expense, Workspace } from "../lib/ledger";
+import { WorkspaceSetup } from "../components/WorkspaceSetup";
+import { ExpenseHistory } from "../components/ExpenseHistory";
+import { ExpenseForm } from "../components/ExpenseForm";
+import { DeleteExpenseDialog } from "../components/DeleteExpenseDialog";
+import { StatusMessage } from "../components/StatusMessage";
+import { Dialog } from "../components/Dialog";
+import { LeaveDialog } from "../components/LeaveDialog";
 
 type User = { id: string; name: string; email: string };
-
 export function WorkspacePage() {
-  const [user, setUser] = useState<User | null>(null);
-  const [error, setError] = useState("");
-  const [pending, setPending] = useState(false);
-  const [attempt, setAttempt] = useState(0);
+  const [user, setUser] = useState<User | null>(null),
+    [workspace, setWorkspace] = useState<Workspace | null>(null);
+  const [error, setError] = useState(""),
+    [notice, setNotice] = useState("");
+  const [pending, setPending] = useState(false),
+    [attempt, setAttempt] = useState(0),
+    [revision, setRevision] = useState(0);
+  const [editor, setEditor] = useState<{ expense: Expense | null } | null>(
+      null,
+    ),
+    [deleting, setDeleting] = useState<Expense | null>(null);
+  const addButton = useRef<HTMLButtonElement>(null);
+  const [settings, setSettings] = useState(false),
+    [settingsDirty, setSettingsDirty] = useState(false),
+    [settingsPending, setSettingsPending] = useState(false),
+    [discardSettings, setDiscardSettings] = useState(false);
+  const closeSettings = () => {
+    if (settingsPending) return;
+    if (settingsDirty) setDiscardSettings(true);
+    else setSettings(false);
+  };
   useEffect(() => {
-    document.title = "Your workspace · Expense Tracker";
+    document.title = "Your expenses · Expense Tracker";
     const abort = new AbortController();
     async function load() {
       try {
@@ -28,12 +53,23 @@ export function WorkspacePage() {
           window.location.replace("/sign-in");
           return;
         }
-        if (!response.ok) throw new Error("Unavailable");
+        if (!response.ok)
+          throw new Error("Unable to load your account. Please try again.");
         const data = (await response.json()) as { user: User };
-        setUser(data.user);
-      } catch {
+        const loaded = await api<Workspace>("/workspace", {
+          signal: abort.signal,
+        });
+        if (!abort.signal.aborted) {
+          setUser(data.user);
+          setWorkspace(loaded);
+        }
+      } catch (err) {
         if (!abort.signal.aborted)
-          setError("Unable to load your workspace. Please try again.");
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Unable to load your workspace. Please try again.",
+          );
       }
     }
     void load();
@@ -53,29 +89,64 @@ export function WorkspacePage() {
       setPending(false);
     }
   }
+  const add = () => {
+    setNotice("");
+    setEditor({ expense: null });
+  };
+  function categoryAdded(category: Category) {
+    setWorkspace((current) =>
+      current
+        ? {
+            ...current,
+            categories: [
+              ...current.categories.filter((item) => item.id !== category.id),
+              category,
+            ].sort((a, b) => a.name.localeCompare(b.name)),
+          }
+        : current,
+    );
+  }
+  function saved() {
+    const editing = Boolean(editor?.expense);
+    setEditor(null);
+    setRevision((value) => value + 1);
+    setNotice(editing ? "Changes saved." : "Expense added.");
+    setWorkspace((current) =>
+      current
+        ? {
+            ...current,
+            preferences: { ...current.preferences, currencyLocked: 1 },
+          }
+        : current,
+    );
+    requestAnimationFrame(() => addButton.current?.focus());
+  }
   return (
-    <div className="workspace">
+    <div className="workspace ledger-workspace">
       <header className="workspace-header">
         <Brand />
-        <button
-          type="button"
-          className="secondary-button"
-          onClick={signOut}
-          disabled={pending}
-        >
-          {pending ? (
-            <LoaderCircle className="spin" size={16} aria-hidden="true" />
-          ) : (
-            <LogOut size={16} aria-hidden="true" />
-          )}{" "}
-          {pending ? "Signing out…" : "Sign out"}
-        </button>
+        <div className="workspace-account">
+          {user && <span className="account-email">{user.email}</span>}
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={signOut}
+            disabled={pending}
+          >
+            {pending ? (
+              <LoaderCircle className="spin" size={16} aria-hidden="true" />
+            ) : (
+              <LogOut size={16} aria-hidden="true" />
+            )}
+            {pending ? "Signing out…" : "Sign out"}
+          </button>
+        </div>
       </header>
-      <main className="workspace-main" id="main-content">
+      <main className="ledger-main" id="main-content">
         {error && (
-          <div className="workspace-error" role="alert">
+          <StatusMessage error>
             {error}{" "}
-            {!user && (
+            {!workspace && (
               <button
                 type="button"
                 className="text-button"
@@ -84,60 +155,163 @@ export function WorkspacePage() {
                 Try again
               </button>
             )}
-          </div>
+          </StatusMessage>
         )}
-        {!user && !error && (
+        {!workspace && !error && (
           <p role="status" className="loading-status">
             <LoaderCircle className="spin" aria-hidden="true" /> Loading your
             workspace…
           </p>
         )}
-        {user && (
+        {user && workspace && (
           <>
-            <div className="ready-badge">
-              <Check size={14} aria-hidden="true" /> ACCOUNT READY
+            <div className="ledger-heading">
+              <div>
+                <p className="ledger-eyebrow">
+                  <ReceiptText size={15} aria-hidden="true" /> YOUR PERSONAL
+                  LEDGER
+                </p>
+                <h1>
+                  Welcome, {user.name.split(/\s+/)[0]}
+                  <span className="brand-dot">.</span>
+                </h1>
+                <p className="ledger-subtitle">
+                  A little attention to your everyday spending.
+                </p>
+              </div>
+              {workspace.preferences.currency && (
+                <button
+                  ref={addButton}
+                  type="button"
+                  className="primary-button add-expense"
+                  onClick={add}
+                >
+                  <Plus size={18} aria-hidden="true" /> Add expense
+                </button>
+              )}
             </div>
-            <h1>
-              Welcome, {user.name.split(/\s+/)[0]}
-              <span className="brand-dot">.</span>
-            </h1>
-            <p className="workspace-intro">A clearer picture starts here.</p>
-            <section className="welcome-card" aria-labelledby="workspace-title">
-              <span className="welcome-icon">
-                <CircleCheck size={28} aria-hidden="true" />
-              </span>
-              <h2 id="workspace-title">You're in. Your space is ready.</h2>
-              <p>
-                You're signed in as <strong>{user.email}</strong>. Your account
-                is saved, and you can return whenever you're ready.
-              </p>
-              <div className="milestone">
-                <span>
-                  <ShieldCheck size={20} aria-hidden="true" /> Signup & sign-in
-                </span>
-                <span className="complete-label">
-                  Complete <Check size={14} aria-hidden="true" />
-                </span>
-              </div>
-              <div className="next-milestone">
-                <span className="next-icon">
-                  <ArrowRight size={18} aria-hidden="true" />
-                </span>
-                <span>
-                  <strong>Next: your first expense</strong>
-                  <small>
-                    Expense entry, categories, and your monthly overview are
-                    coming in the next milestones.
-                  </small>
-                </span>
-              </div>
-            </section>
-            <p className="workspace-footnote">
-              Built one useful step at a time.
-            </p>
+            {notice && <StatusMessage>{notice}</StatusMessage>}
+            {!workspace.preferences.currency ? (
+              <WorkspaceSetup
+                onSaved={(loaded) => {
+                  setWorkspace(loaded);
+                  setNotice("Workspace ready. Add your first expense.");
+                }}
+              />
+            ) : (
+              <>
+                <div className="ledger-context">
+                  <span>
+                    <ShieldCheck size={15} aria-hidden="true" /> Only your
+                    expenses appear here
+                  </span>
+                  <span>
+                    {workspace.preferences.currency}{" "}
+                    <span aria-hidden="true">·</span>{" "}
+                    {workspace.preferences.timezone?.replaceAll("_", " ")}
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label="Workspace settings"
+                      title="Workspace settings"
+                      onClick={() => {
+                        setSettingsDirty(false);
+                        setSettingsPending(false);
+                        setSettings(true);
+                      }}
+                    >
+                      <Settings2 size={16} aria-hidden="true" />
+                    </button>
+                  </span>
+                </div>
+                <ExpenseHistory
+                  workspace={workspace}
+                  revision={revision}
+                  onAdd={add}
+                  onEdit={(expense) => {
+                    setNotice("");
+                    setEditor({ expense });
+                  }}
+                  onDelete={(expense) => {
+                    setNotice("");
+                    setDeleting(expense);
+                  }}
+                />
+                <p className="ledger-footnote">
+                  Recorded expenses only. Income, budgets, and reports are next.
+                </p>
+              </>
+            )}
           </>
         )}
       </main>
+      {editor && workspace && (
+        <ExpenseForm
+          expense={editor.expense}
+          workspace={workspace}
+          onClose={() => {
+            setEditor(null);
+            setRevision((value) => value + 1);
+          }}
+          onSaved={saved}
+          onCategory={categoryAdded}
+        />
+      )}
+      {deleting && (
+        <DeleteExpenseDialog
+          expense={deleting}
+          onClose={() => {
+            setDeleting(null);
+            setRevision((value) => value + 1);
+          }}
+          onDeleted={() => {
+            setDeleting(null);
+            setRevision((value) => value + 1);
+            setNotice("Expense deleted.");
+            requestAnimationFrame(() => addButton.current?.focus());
+          }}
+        />
+      )}
+      {settings && workspace && (
+        <>
+          <Dialog
+            open
+            titleId="setup-title"
+            className="settings-dialog"
+            onRequestClose={closeSettings}
+          >
+            <WorkspaceSetup
+              preferences={workspace.preferences}
+              onDirtyChange={setSettingsDirty}
+              onPendingChange={setSettingsPending}
+              onSaved={(loaded) => {
+                setWorkspace(loaded);
+                setSettings(false);
+                setRevision((value) => value + 1);
+                setNotice("Workspace settings saved.");
+              }}
+            />
+            <div className="dialog-footer">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={closeSettings}
+                disabled={settingsPending}
+              >
+                Close settings
+              </button>
+            </div>
+          </Dialog>
+          <LeaveDialog
+            destination={discardSettings ? "settings" : null}
+            onCancel={() => setDiscardSettings(false)}
+            onDiscard={() => {
+              setDiscardSettings(false);
+              setSettings(false);
+            }}
+          />
+        </>
+      )}
     </div>
   );
 }

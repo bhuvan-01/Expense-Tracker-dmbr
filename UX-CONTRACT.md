@@ -1,6 +1,6 @@
 # Expense Tracker — Proposed UX Contract
 
-Status: authentication implemented on 4 November 2026. Financial workflows below remain proposed requirements.
+Status: authentication implemented on 4 November 2026; expense entry/history milestone implemented on 5 November 2026. Income, refunds, budgets, and reports remain planned.
 
 ## Context and ownership
 
@@ -15,6 +15,27 @@ Audience, scope, calculations, and privacy decisions are proposed in [PROJECT_PL
 | Feedback | `src/pages/AuthPage.tsx`, `src/pages/WorkspacePage.tsx` | Inline errors and announced status | Error / pending | Failure/retry browser tests |
 | Dialog | `src/components/LeaveDialog.tsx` | Native dialog with owned content and managed opening/cancel | Discard form | Escape, focus, discard tests |
 | Session/access | `server/auth.ts`, `server/app.ts` | Better Auth and server-enforced session requirement | Public auth / protected workspace | `tests/auth.test.ts` |
+| Select/Listbox | `src/components/SelectField.tsx` | Native select; platform owns popup appearance, geometry and keyboard interaction | Currency, timezone, category, payment method, filters, sort | `tests/e2e/expenses.spec.ts` |
+| Date | `src/components/Field.tsx` with `type="date"`, `src/lib/ledger.ts` | Native calendar; ISO date-only storage with shared validation | Expense date, range filters | `tests/ledger.test.ts`, browser fill/keyboard tests |
+| CRUD | `server/ledger.ts`, `server/ledger-routes.ts`, `src/components/ExpenseForm.tsx`, `ExpenseHistory.tsx`, `DeleteExpenseDialog.tsx` | Owner-scoped expense operations and shared status/dialog primitives | Create, read, edit, permanent delete | `tests/ledger.test.ts`, `tests/e2e/expenses.spec.ts` |
+
+## Implemented expense behavior
+
+The account-ready placeholder is replaced by workspace setup and a private expense ledger. Workspace currency and timezone require user confirmation before recording money. Supported currencies are GBP, USD, EUR, INR, JPY, AED and BHD; digits are explicit in `src/lib/ledger.ts`. Workspace settings permit correcting currency before the first expense and changing timezone later. Currency locks permanently after the first expense, including after deleting every expense. Date-only records never shift with timezone changes; timezone determines today's upper bound only.
+
+The user can add positive expenses with amount, category and date, plus optional merchant/description, payment method and note. Starter categories and custom categories are owner-scoped. Category rename/archive remains future scope; there is no category deletion control. Custom category name retries reuse an existing case-insensitive match. Future category archiving must retain referenced history.
+
+Money parses as a decimal string to integer minor units; a record is limited to 999,999,999 minor units. Future-dated records, invalid calendar dates, negative/zero values, excessive precision and cross-owner categories are rejected by the server. UI and API use the same validation and date rules.
+
+Creates use an owner-scoped idempotency key. Same key/body returns the existing expense; different details with a previously committed key return 409. An uncertain network/server outcome freezes the entered details for an identical retry or discard; it must not silently start a second create with altered details. A deleted expense keeps a request tombstone so an old retry cannot recreate it. Edit and delete require the current record version; stale mutations return 409 and preserve form values. Success feedback only follows server confirmation. Permanent deletion names the expense, amount, consequence, and lack of Undo; Keep expense is initially focused. A retry reporting 404 after deletion is treated as already removed. Closing an editor/delete dialog refreshes history to recover from conflicts or uncertain outcomes.
+
+The history list has 25 entries per page. Search covers merchant, note and category; wildcard characters are literal. Search is debounced 300ms, IME-safe, clears immediately, and is sent by JSON body so financial text stays out of URLs. Safe category/date/sort/page state persists in URL parameters. Browser Back/Forward restores these safe filters. Requests cancel or discard stale responses. Page requests clamp to the last surviving page after deletion.
+
+Displayed total spending covers all matching results across pages, with no income or bank balance implication. First-use empty, no-results, loading, retry, stale-results-with-error and expired-session states are separate. A session-expired editor retains its details in memory and provides sign-in in a separate tab, then retry. No financial drafts are placed in persistent browser storage.
+
+`Dialog.tsx` is the shared native modal owner for expense forms, discard and deletion. Desktop entry uses a right-side drawer; phone uses full-screen form. Escape/Cancel on dirty forms opens the discard confirmation. Native date/calendar and select popup ownership deliberately supersedes the unimplemented authored-picker proposal below: platform rendering and locale are accepted for this English-first milestone; no popup geometry customization is promised.
+
+`StatusMessage.tsx` owns expense inline error/success feedback. Existing Field and theme primitives are reused. No toast layer or bulk selection is introduced.
 
 Signup collects name, email, password, and confirmation; client/server enforce applicable constraints. Passwords use the library's scrypt hash; sessions are database-backed cookies. Signup signs in immediately, without mailbox verification. Production verification/recovery awaits an email provider. The client stores no credentials or session tokens in persistent browser storage.
 

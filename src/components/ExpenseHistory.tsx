@@ -1,0 +1,436 @@
+import { useEffect, useRef, useState } from "react";
+import {
+  ArrowDownUp,
+  ChevronLeft,
+  ChevronRight,
+  Pencil,
+  ReceiptText,
+  Search,
+  Trash2,
+  X,
+  LoaderCircle,
+} from "lucide-react";
+import { api, ApiError } from "../lib/api";
+import {
+  dateLabel,
+  money,
+  type Expense,
+  type ExpenseFilters,
+  type ExpenseList,
+  type Workspace,
+} from "../lib/ledger";
+import { Field } from "./Field";
+import { SelectField } from "./SelectField";
+import { StatusMessage } from "./StatusMessage";
+
+function readFilters(q = ""): ExpenseFilters {
+  const params = new URLSearchParams(window.location.search);
+  return {
+    q,
+    from: params.get("from") || "",
+    to: params.get("to") || "",
+    category: params.get("category") || "",
+    sort: params.get("sort") || "date_desc",
+    page: Math.max(1, Number(params.get("page")) || 1),
+  };
+}
+function writeFilters(filters: ExpenseFilters, replace = false) {
+  const params = new URLSearchParams();
+  for (const key of ["from", "to", "category", "sort", "page"] as const)
+    if (
+      filters[key] &&
+      !(key === "page" && filters.page === 1) &&
+      !(key === "sort" && filters.sort === "date_desc")
+    )
+      params.set(key, String(filters[key]));
+  const url = `${window.location.pathname}${params.size ? `?${params}` : ""}`;
+  if (url !== `${window.location.pathname}${window.location.search}`)
+    window.history[replace ? "replaceState" : "pushState"]({}, "", url);
+}
+export function ExpenseHistory({
+  workspace,
+  revision,
+  onAdd,
+  onEdit,
+  onDelete,
+}: {
+  workspace: Workspace;
+  revision: number;
+  onAdd: () => void;
+  onEdit: (expense: Expense) => void;
+  onDelete: (expense: Expense) => void;
+}) {
+  const [filters, setFilters] = useState<ExpenseFilters>(() => readFilters());
+  const [query, setQuery] = useState(""),
+    [composing, setComposing] = useState(false);
+  const [list, setList] = useState<ExpenseList | null>(null);
+  const [error, setError] = useState(""),
+    [expired, setExpired] = useState(false),
+    [pending, setPending] = useState(true),
+    [attempt, setAttempt] = useState(0);
+  const search = useRef<HTMLInputElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const focusPage = useRef(false);
+  useEffect(() => {
+    const pop = () => setFilters((current) => readFilters(current.q));
+    window.addEventListener("popstate", pop);
+    return () => window.removeEventListener("popstate", pop);
+  }, []);
+  useEffect(() => {
+    if (composing) return;
+    const timer = setTimeout(
+      () =>
+        setFilters((current) =>
+          current.q === query ? current : { ...current, q: query, page: 1 },
+        ),
+      query ? 300 : 0,
+    );
+    return () => clearTimeout(timer);
+  }, [query, composing]);
+  useEffect(() => {
+    const abort = new AbortController();
+    setPending(true);
+    setError("");
+    setExpired(false);
+    void api<ExpenseList>("/expenses/search", {
+      method: "POST",
+      body: JSON.stringify(filters),
+      signal: abort.signal,
+    })
+      .then((result) => {
+        if (abort.signal.aborted) return;
+        setList(result);
+        setPending(false);
+        if (result.page !== filters.page) {
+          const corrected = { ...filters, page: result.page };
+          writeFilters(corrected, true);
+          setFilters(corrected);
+        }
+        if (focusPage.current) {
+          heading.current?.focus();
+          focusPage.current = false;
+        }
+      })
+      .catch((err) => {
+        if (abort.signal.aborted) return;
+        setError(
+          err instanceof Error ? err.message : "Unable to load expenses.",
+        );
+        setExpired(err instanceof ApiError && err.status === 401);
+        setPending(false);
+      });
+    return () => abort.abort();
+  }, [filters, revision, attempt]);
+  const change = (key: keyof ExpenseFilters, value: string | number) => {
+    const next = {
+      ...filters,
+      [key]: value,
+      ...(key !== "page" ? { page: 1 } : {}),
+    };
+    writeFilters(next);
+    setFilters(next);
+    if (key === "page") focusPage.current = true;
+  };
+  const active = Boolean(
+    filters.q || filters.category || filters.from || filters.to,
+  );
+  const clear = () => {
+    setQuery("");
+    const next = {
+      q: "",
+      from: "",
+      to: "",
+      category: "",
+      sort: "date_desc",
+      page: 1,
+    };
+    writeFilters(next);
+    setFilters(next);
+    search.current?.focus();
+  };
+  return (
+    <section className="history-panel" aria-labelledby="history-title">
+      <div className="history-title-row">
+        <div>
+          <h2 id="history-title" ref={heading} tabIndex={-1}>
+            Your expense history
+          </h2>
+          <p>Everyday spending, all in one place.</p>
+        </div>
+        {active && (
+          <button type="button" className="text-button" onClick={clear}>
+            Clear filters
+          </button>
+        )}
+      </div>
+      <div className="ledger-filters">
+        <div className="field history-search">
+          <label htmlFor="expense-search">Search expenses</label>
+          <div className="search-control">
+            <Search size={18} aria-hidden="true" />
+            <input
+              ref={search}
+              id="expense-search"
+              type="search"
+              maxLength={120}
+              placeholder="Search merchant, category, or note"
+              value={query}
+              onCompositionStart={() => setComposing(true)}
+              onCompositionEnd={() => setComposing(false)}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                if (!event.target.value)
+                  setFilters((current) => ({ ...current, q: "", page: 1 }));
+              }}
+            />
+            {query && (
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Clear search"
+                onClick={() => {
+                  setQuery("");
+                  setFilters((current) => ({ ...current, q: "", page: 1 }));
+                  search.current?.focus();
+                }}
+              >
+                <X size={16} aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        </div>
+        <SelectField
+          id="filter-category"
+          label="Category"
+          value={filters.category}
+          onChange={(event) => change("category", event.target.value)}
+        >
+          <option value="">All categories</option>
+          {workspace.categories.map((category) => (
+            <option key={category.id} value={category.id}>
+              {category.name}
+            </option>
+          ))}
+        </SelectField>
+        <Field
+          id="filter-from"
+          label="From date"
+          type="date"
+          value={filters.from}
+          min="1900-01-01"
+          onChange={(event) => change("from", event.target.value)}
+        />
+        <Field
+          id="filter-to"
+          label="To date"
+          type="date"
+          value={filters.to}
+          min="1900-01-01"
+          onChange={(event) => change("to", event.target.value)}
+        />
+      </div>
+      <div className="history-toolbar">
+        <p className="result-count" role="status">
+          {pending ? (
+            <>
+              <LoaderCircle className="spin" size={14} aria-hidden="true" />{" "}
+              Updating expenses…
+            </>
+          ) : list ? (
+            <>
+              <strong>{list.total}</strong>{" "}
+              {list.total === 1 ? "expense" : "expenses"}
+              {active ? " matching your filters" : " recorded"}
+            </>
+          ) : (
+            "Expenses"
+          )}
+        </p>
+        <div className="sort-control">
+          <ArrowDownUp size={15} aria-hidden="true" />
+          <SelectField
+            id="expense-sort"
+            label="Sort expenses"
+            value={filters.sort}
+            onChange={(event) => change("sort", event.target.value)}
+          >
+            <option value="date_desc">Newest first</option>
+            <option value="date_asc">Oldest first</option>
+            <option value="amount_desc">Highest amount</option>
+            <option value="amount_asc">Lowest amount</option>
+          </SelectField>
+        </div>
+      </div>
+      {error && (
+        <StatusMessage error>
+          {error}
+          {list && <p>Showing the last loaded results.</p>}
+          <div className="error-actions">
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => setAttempt(attempt + 1)}
+            >
+              Try again
+            </button>
+            {expired && (
+              <a href="/sign-in" target="_blank" rel="noopener noreferrer">
+                Sign in in a new tab
+              </a>
+            )}
+          </div>
+        </StatusMessage>
+      )}
+      <div className="history-results" aria-busy={pending}>
+        {list && list.items.length > 0 ? (
+          <>
+            <div className="history-total">
+              <span>
+                Total spent{active ? " in this view" : " across your expenses"}
+              </span>
+              <strong>
+                {money(list.totalMinor, workspace.preferences.currency!)}
+              </strong>
+            </div>
+            <div className="expense-table-wrap">
+              <table className="expense-table">
+                <caption className="sr-only">
+                  Recorded expenses. Edit or delete individual entries using the
+                  actions in each row.
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Expense</th>
+                    <th scope="col">Date</th>
+                    <th scope="col">Category</th>
+                    <th scope="col" className="numeric">
+                      Amount ({workspace.preferences.currency})
+                    </th>
+                    <th scope="col">
+                      <span className="sr-only">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.items.map((expense) => (
+                    <tr key={expense.id}>
+                      <td className="description-cell">
+                        <span className="transaction-icon" aria-hidden="true">
+                          <ReceiptText size={18} />
+                        </span>
+                        <span>
+                          <strong>
+                            {expense.merchant || expense.categoryName}
+                          </strong>
+                          <small>
+                            {expense.paymentMethod}
+                            {expense.note && (
+                              <span className="expense-note">
+                                {" "}
+                                · {expense.note}
+                              </span>
+                            )}
+                          </small>
+                        </span>
+                      </td>
+                      <td className="date-cell">
+                        <time dateTime={expense.date}>
+                          {dateLabel(expense.date)}
+                        </time>
+                      </td>
+                      <td className="category-cell">
+                        <span className="category-pill">
+                          {expense.categoryName}
+                        </span>
+                      </td>
+                      <td className="numeric amount-cell">
+                        {money(expense.amountMinor, expense.currency)}
+                      </td>
+                      <td className="actions-cell">
+                        <button
+                          type="button"
+                          className="icon-button"
+                          aria-label={`Edit ${expense.merchant || expense.categoryName}`}
+                          title="Edit expense"
+                          disabled={pending}
+                          onClick={() => onEdit(expense)}
+                        >
+                          <Pencil size={16} aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-button danger-icon"
+                          aria-label={`Delete ${expense.merchant || expense.categoryName}`}
+                          title="Delete expense"
+                          disabled={pending}
+                          onClick={() => onDelete(expense)}
+                        >
+                          <Trash2 size={16} aria-hidden="true" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <nav className="pagination" aria-label="Expense pages">
+              <p>
+                {(list.page - 1) * list.pageSize + 1}–
+                {Math.min(list.page * list.pageSize, list.total)} of{" "}
+                {list.total}
+              </p>
+              <div>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={pending || list.page <= 1}
+                  onClick={() => change("page", list.page - 1)}
+                >
+                  <ChevronLeft size={16} aria-hidden="true" /> Previous
+                </button>
+                <span>
+                  Page {list.page} of {list.pages}
+                </span>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={pending || list.page >= list.pages}
+                  onClick={() => change("page", list.page + 1)}
+                >
+                  Next <ChevronRight size={16} aria-hidden="true" />
+                </button>
+              </div>
+            </nav>
+          </>
+        ) : !pending && !error ? (
+          <div className="empty-ledger">
+            <span>
+              <ReceiptText size={27} aria-hidden="true" />
+            </span>
+            <h3>
+              {active
+                ? "No matching expenses"
+                : "Small steps. A clearer picture."}
+            </h3>
+            <p>
+              {active
+                ? "Try a different search or clear your filters."
+                : "Add your first expense. A coffee, a grocery shop, a trip home — start with today."}
+            </p>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={active ? clear : onAdd}
+            >
+              {active ? "Clear filters" : "Add your first expense"}
+            </button>
+          </div>
+        ) : !list && pending ? (
+          <p className="loading-status history-loading">
+            Loading your expenses…
+          </p>
+        ) : null}
+      </div>
+    </section>
+  );
+}

@@ -5,7 +5,7 @@ import { createApp } from "./app.js";
 
 const config = loadConfig();
 const { auth, database } = await createAuthentication(config);
-const app = createApp(auth, config.production);
+const app = createApp(auth, database, config.production);
 const vite = config.production
   ? undefined
   : await createServer({

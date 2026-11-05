@@ -1,0 +1,349 @@
+import { test, expect, type Page } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
+
+test.setTimeout(90_000);
+async function account(page: Page, label: string) {
+  await page.goto("/sign-up");
+  await page.getByLabel("Your name", { exact: true }).fill("Alex Ledger");
+  await page
+    .getByLabel("Email address")
+    .fill(`${label}-${Date.now()}@example.com`);
+  await page
+    .getByLabel("Password", { exact: true })
+    .fill("a memorable test password");
+  await page
+    .getByLabel("Confirm password", { exact: true })
+    .fill("a memorable test password");
+  await page
+    .getByRole("button", { name: "Create account", exact: true })
+    .click();
+  await expect(page).toHaveURL("/app");
+  await page.getByLabel("Workspace currency").selectOption("GBP");
+  await page.getByLabel("Your timezone").selectOption("Europe/London");
+  await page.getByRole("button", { name: "Start tracking" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Your expense history" }),
+  ).toBeVisible();
+}
+async function fillExpense(page: Page, merchant: string, amount = "12.34") {
+  await page.getByLabel("Amount (GBP)", { exact: true }).fill(amount);
+  await page
+    .getByRole("dialog", { name: "Add expense", exact: true })
+    .getByLabel("Category", { exact: true })
+    .selectOption({ label: "Groceries" });
+  await page.getByLabel("Date", { exact: true }).fill("2026-10-28");
+  await page.getByLabel("Merchant or description (optional)").fill(merchant);
+}
+async function a11y(page: Page) {
+  expect(
+    (
+      await new AxeBuilder({ page })
+        .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
+        .analyze()
+    ).violations,
+  ).toEqual([]);
+}
+
+test("desktop setup, expense CRUD, category creation, search, filters and totals", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await account(page, "ledger-desktop");
+  await page
+    .getByRole("button", { name: "Workspace settings", exact: true })
+    .click();
+  await expect(page.getByLabel("Workspace currency")).toBeEnabled();
+  await page.getByLabel("Your timezone").selectOption("UTC");
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Leave this form?" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Keep editing" }).click();
+  await page.getByRole("button", { name: "Save settings" }).click();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Small steps. A clearer picture." }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Add expense", exact: true }).click();
+  await page.getByRole("button", { name: "Save expense", exact: true }).click();
+  await expect(page.getByLabel("Amount (GBP)", { exact: true })).toBeFocused();
+  await fillExpense(page, "Corner market");
+  await page.getByLabel("Note (optional)").fill("Keep this search private");
+  await a11y(page);
+  await page.getByRole("button", { name: "Save expense", exact: true }).click();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(
+    page.getByRole("row").filter({ hasText: "Corner market" }),
+  ).toContainText("£12.34");
+  await page
+    .getByRole("button", { name: "Workspace settings", exact: true })
+    .click();
+  await expect(page.getByLabel("Workspace currency")).toBeDisabled();
+  await a11y(page);
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Expense added." }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByRole("row").filter({ hasText: "Corner market" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Edit Corner market" }).click();
+  await page.getByLabel("Amount (GBP)", { exact: true }).fill("15.50");
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(
+    page.getByRole("row").filter({ hasText: "Corner market" }),
+  ).toContainText("£15.50");
+  await page.getByRole("button", { name: "Add expense", exact: true }).click();
+  await fillExpense(page, "Pet shop", "4.50");
+  await page.getByText("Add a new category", { exact: true }).click();
+  await page.getByLabel("New category name").fill("Pet supplies");
+  await page.getByRole("button", { name: "Add category", exact: true }).click();
+  await expect(
+    page.getByRole("dialog").getByLabel("Category", { exact: true }),
+  ).not.toHaveValue("");
+  await page.getByRole("button", { name: "Save expense", exact: true }).click();
+  await expect(page.locator(".history-total")).toContainText("£20.00");
+  await page.getByLabel("Search expenses").fill("search private");
+  await expect(
+    page.getByRole("row").filter({ hasText: "Pet shop" }),
+  ).not.toBeVisible();
+  await expect(
+    page.getByRole("row").filter({ hasText: "Corner market" }),
+  ).toBeVisible();
+  expect(page.url()).not.toContain("search");
+  await page.getByRole("button", { name: "Clear search" }).click();
+  await expect(page.getByLabel("Search expenses")).toBeFocused();
+  await expect(
+    page.getByRole("row").filter({ hasText: "Pet shop" }),
+  ).toBeVisible();
+  await page
+    .getByLabel("Category", { exact: true })
+    .selectOption({ label: "Pet supplies" });
+  await expect(page.locator(".history-total")).toContainText("£4.50");
+  await page.reload();
+  await expect(page.getByLabel("Category", { exact: true })).not.toHaveValue(
+    "",
+  );
+  await expect(page.locator(".history-total")).toContainText("£4.50");
+  await page
+    .getByRole("button", { name: "Clear filters", exact: true })
+    .click();
+  await page.getByLabel("Sort expenses").selectOption("amount_asc");
+  await expect(page.getByRole("row").nth(1)).toContainText("Pet shop");
+  await a11y(page);
+  await page.screenshot({
+    path: ".data/expense-ledger-desktop.png",
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "Delete Pet shop" }).click();
+  await expect(
+    page.getByRole("button", { name: "Keep expense" }),
+  ).toBeFocused();
+  await page.getByRole("button", { name: "Keep expense" }).click();
+  await expect(
+    page.getByRole("row").filter({ hasText: "Pet shop" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Delete Pet shop" }).click();
+  await page
+    .getByRole("button", { name: "Delete expense", exact: true })
+    .click();
+  await expect(
+    page.getByRole("row").filter({ hasText: "Pet shop" }),
+  ).not.toBeVisible();
+  await expect(page.locator(".history-total")).toContainText("£15.50");
+});
+
+test("phone forms preserve input and retry a lost successful save without duplicates", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 780 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await account(page, "ledger-phone");
+  await page.getByRole("button", { name: "Add expense", exact: true }).click();
+  await fillExpense(page, "Coffee on the way home", "2.80");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Leave this form?" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Keep editing" }).click();
+  await expect(page.getByLabel("Amount (GBP)", { exact: true })).toHaveValue(
+    "2.80",
+  );
+  await a11y(page);
+  let key = "";
+  await page.route(
+    "**/api/expenses",
+    async (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      key = route.request().headers()["idempotency-key"];
+      const response = await route.fetch();
+      expect(response.status()).toBe(201);
+      // The server committed the write, but its response never reaches the client.
+      await route.abort("failed");
+    },
+    { times: 1 },
+  );
+  await page.getByRole("button", { name: "Save expense", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("Unable to connect");
+  await expect(
+    page.getByLabel("Merchant or description (optional)"),
+  ).toHaveValue("Coffee on the way home");
+  const retry = page.waitForRequest(
+    (request) =>
+      request.url().endsWith("/api/expenses") && request.method() === "POST",
+  );
+  await page.getByRole("button", { name: "Save expense", exact: true }).click();
+  expect((await retry).headers()["idempotency-key"]).toBe(key);
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(page.locator(".result-count")).toContainText(
+    "1 expense recorded",
+  );
+  await expect(page.locator(".history-total")).toContainText("£2.80");
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await a11y(page);
+  await page.getByRole("button", { name: "Add expense", exact: true }).click();
+  await page.screenshot({
+    path: ".data/add-expense-phone.png",
+    fullPage: false,
+  });
+  await page.getByLabel("Amount (GBP)", { exact: true }).fill("3.00");
+  await page.getByRole("button", { name: "Close expense form" }).click();
+  await page.getByRole("button", { name: "Discard changes" }).click();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Add expense", exact: true }),
+  ).toBeFocused();
+  await page.screenshot({
+    path: ".data/expense-ledger-phone.png",
+    fullPage: true,
+  });
+});
+
+test("edit conflicts, delete failures and expired sessions keep recovery available", async ({
+  page,
+}) => {
+  await account(page, "ledger-recovery");
+  await page.getByRole("button", { name: "Add expense", exact: true }).click();
+  await fillExpense(page, "Train ticket", "10.00");
+  await page.getByRole("button", { name: "Save expense", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Edit Train ticket" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Edit Train ticket" }).click();
+  const history = await (await page.request.get("/api/expenses")).json();
+  const expense = history.items[0];
+  const update = await page.request.patch(`/api/expenses/${expense.id}`, {
+    headers: { Origin: new URL(page.url()).origin },
+    data: {
+      amount: "11.00",
+      date: expense.date,
+      categoryId: expense.categoryId,
+      merchant: expense.merchant,
+      version: expense.version,
+    },
+  });
+  expect(update.status()).toBe(200);
+  await page.getByLabel("Amount (GBP)", { exact: true }).fill("12.00");
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("changed elsewhere");
+  await expect(page.getByLabel("Amount (GBP)", { exact: true })).toHaveValue(
+    "12.00",
+  );
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByRole("button", { name: "Discard changes" }).click();
+  await page.reload();
+  await expect(
+    page.getByRole("row").filter({ hasText: "Train ticket" }),
+  ).toContainText("£11.00");
+  await page.getByRole("button", { name: "Delete Train ticket" }).click();
+  await page.route("**/api/expenses/*", (route) =>
+    route.request().method() === "DELETE"
+      ? route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          body: JSON.stringify({ error: "Unable to delete. Try again." }),
+        })
+      : route.continue(),
+  );
+  await page
+    .getByRole("button", { name: "Delete expense", exact: true })
+    .click();
+  await expect(page.getByRole("alert")).toContainText("Unable to delete");
+  await expect(
+    page.getByRole("dialog", { name: "Delete this expense?" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Keep expense" }).click();
+  await page.unroute("**/api/expenses/*");
+  await page.getByRole("button", { name: "Add expense", exact: true }).click();
+  await fillExpense(page, "Session recovery", "3.00");
+  await page.request.post("/api/auth/sign-out", {
+    headers: { Origin: new URL(page.url()).origin },
+    data: {},
+  });
+  await page.getByRole("button", { name: "Save expense", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("session has expired");
+  await expect(
+    page.getByRole("link", { name: "Sign in in a new tab" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Amount (GBP)", { exact: true })).toHaveValue(
+    "3.00",
+  );
+});
+
+test("pagination, empty results and failed history requests recover without losing context", async ({
+  page,
+}) => {
+  await account(page, "ledger-pagination");
+  const workspace = await (await page.request.get("/api/workspace")).json();
+  for (let i = 0; i < 26; i++) {
+    const response = await page.request.post("/api/expenses", {
+      headers: {
+        Origin: new URL(page.url()).origin,
+        "Idempotency-Key": crypto.randomUUID(),
+      },
+      data: {
+        amount: "1.00",
+        date: "2026-10-28",
+        categoryId: workspace.categories[0].id,
+        merchant: `Purchase ${i}`,
+      },
+    });
+    expect(response.status()).toBe(201);
+  }
+  await page.reload();
+  await expect(page.locator(".result-count")).toContainText("26 expenses");
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(page.getByText("Page 2 of 2", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Your expense history" }),
+  ).toBeFocused();
+  await page.getByRole("button", { name: "Previous", exact: true }).click();
+  await page.getByLabel("Search expenses").fill("nothing-matches");
+  await expect(
+    page.getByRole("heading", { name: "No matching expenses" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Clear search" }).click();
+  await expect(page.locator(".result-count")).toContainText("26 expenses");
+  await page.route(
+    "**/api/expenses/search",
+    (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Unable to load expenses." }),
+      }),
+    { times: 1 },
+  );
+  await page.getByLabel("Sort expenses").selectOption("amount_asc");
+  await expect(page.getByRole("alert")).toContainText(
+    "Showing the last loaded results",
+  );
+  await page.getByRole("button", { name: "Try again", exact: true }).click();
+  await expect(page.getByRole("alert")).not.toBeVisible();
+  await expect(page.locator(".result-count")).toContainText("26 expenses");
+});

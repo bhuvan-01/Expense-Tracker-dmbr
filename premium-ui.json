@@ -3,7 +3,14 @@
   "sourceRoots": ["src"],
   "locale": "en-GB",
   "canonicalMap": "UX-CONTRACT.md",
-  "requiredCapabilities": ["Form", "Scrollbar"],
+  "requiredCapabilities": [
+    "Form",
+    "Scrollbar",
+    "Select/Listbox",
+    "Date",
+    "CRUD"
+  ],
+  "ownership": { "Select/Listbox": "native", "Date": "native" },
   "commands": {
     "unit": "npm test",
     "e2e": "npm run test:e2e",
@@ -11,6 +18,7 @@
     "build": "npm run build"
   },
   "evidence": {
-    "failurePaths": "tests/e2e/auth.spec.ts"
+    "failurePaths": "tests/e2e/expenses.spec.ts",
+    "crudFullFlow": "tests/e2e/expenses.spec.ts"
   }
 }

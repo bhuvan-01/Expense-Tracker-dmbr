@@ -26,7 +26,7 @@ async function fixture(t: TestContext, production = false) {
     production,
   };
   const { auth, database } = await createAuthentication(config);
-  const server = createApp(auth, production).listen(0, "127.0.0.1");
+  const server = createApp(auth, database, production).listen(0, "127.0.0.1");
   await once(server, "listening");
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   t.after(async () => {

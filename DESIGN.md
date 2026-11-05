@@ -46,7 +46,7 @@ components:
 
 ## Overview
 
-Design direction seeded on 28 October 2026; authentication screens implemented on 4 November 2026. Remaining financial screens are still planned. User preferences may revise the proposal.
+Design direction seeded on 28 October 2026; authentication screens implemented on 4 November 2026; expense ledger implemented on 5 November 2026. Income, budget, and reporting screens remain planned. User preferences may revise the proposal.
 
 The reference is the useful order of a personal ledger: aligned figures, clear dates, concise categories, and enough space to correct an entry comfortably. The audience is an individual recording daily spending on a phone and reviewing a month on a larger screen. This is a product interface; the public launch page uses the same identity with lower information density.
 
@@ -104,6 +104,14 @@ Controls use 8px radii, content surfaces 12px. Avoid making every number a separ
 - Loaders and feedback: use an unobtrusive app spinner with text, persistent error guidance, and nonblocking success status.
 - Motion: short functional transitions only; respect reduced motion. No animated amount changes that obscure the saved value.
 - Copy: sentence case, precise labels, and neutral language. Say “Income minus expenses” rather than “Account balance.”
+
+### Expense ledger
+
+`src/styles.css` extends the established theme without changing its palette/type tokens. The ledger uses a restrained single-page layout while there is only one financial workflow; adding an empty sidebar would create unused navigation. History is the main surface, with direct totals, subtle category tags, and aligned amount columns. The total always names its filter scope. No fake monthly balance or budget appears.
+
+`SelectField.tsx` uses native selects and `Field.tsx` uses native date controls. Their closed triggers match shared field styles; the platform owns open popup appearance and keyboard interaction. `Dialog.tsx` supplies owned modal content with a desktop right-side entry drawer and full-screen phone variant. `ExpenseHistory.tsx` presents a semantic table on desktop and rearranges the same cells into rows on phones without removing actions or amounts. Long descriptions and notes wrap; amounts are never truncated.
+
+`StatusMessage.tsx` uses existing semantic success/danger colors for inline feedback. `WorkspaceSetup.tsx` reuses controls and typography from authentication. All actual data is private user-entered data; sample content remains confined to the labeled authentication illustration.
 
 ## Do's and Don'ts
 
