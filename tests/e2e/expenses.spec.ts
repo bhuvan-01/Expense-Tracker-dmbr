@@ -237,6 +237,9 @@ test("desktop setup, expense CRUD, category creation, search, filters and totals
   await expect(
     page.getByRole("article", { name: "Overall budget", exact: true }),
   ).toContainText("£5.50 over budget");
+  await expect(
+    page.getByRole("heading", { name: "Monthly budgets", exact: true }),
+  ).toBeFocused();
   await page
     .getByRole("button", { name: "Set Food shopping budget", exact: true })
     .click();

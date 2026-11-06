@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { amountInput, money, todayIn, type Workspace } from "../lib/ledger";
 import type { Budget, BudgetMonth } from "../lib/budgets";
@@ -192,6 +192,7 @@ export function Budgets({
   revision: number;
   onSaved: () => void;
 }) {
+  const restoreFocus = useRef(false);
   const [showAll, setShowAll] = useState(false);
   const [month, setMonth] = useState(() =>
     todayIn(workspace.preferences.timezone!).slice(0, 7),
@@ -214,6 +215,12 @@ export function Budgets({
         if (!abort.signal.aborted) {
           setData(result);
           setPending(false);
+          if (restoreFocus.current) {
+            restoreFocus.current = false;
+            requestAnimationFrame(() =>
+              document.getElementById("budgets-title")?.focus(),
+            );
+          }
         }
       })
       .catch((err) => {
@@ -222,6 +229,12 @@ export function Budgets({
             err instanceof Error ? err.message : "Unable to load budgets.",
           );
           setPending(false);
+          if (restoreFocus.current) {
+            restoreFocus.current = false;
+            requestAnimationFrame(() =>
+              document.getElementById("budgets-title")?.focus(),
+            );
+          }
         }
       });
     return () => abort.abort();
@@ -234,7 +247,9 @@ export function Budgets({
     >
       <header className="period-heading">
         <div>
-          <h2 id="budgets-title">Monthly budgets</h2>
+          <h2 id="budgets-title" tabIndex={-1}>
+            Monthly budgets
+          </h2>
           <p>Plan a limit. Keep your spending in view.</p>
         </div>
         <Field
@@ -375,11 +390,13 @@ export function Budgets({
           onClose={() => {
             setEditing(null);
             setAttempt((value) => value + 1);
+            restoreFocus.current = true;
           }}
           onSaved={() => {
             setEditing(null);
             setNotice("Budget saved.");
             onSaved();
+            restoreFocus.current = true;
           }}
         />
       )}
