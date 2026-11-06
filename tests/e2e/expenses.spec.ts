@@ -220,6 +220,44 @@ test("desktop setup, expense CRUD, category creation, search, filters and totals
     path: ".data/monthly-overview-phone.png",
     fullPage: true,
   });
+  await page.getByRole("button", { name: "Budgets", exact: true }).click();
+  await page.getByLabel("Budget month", { exact: true }).fill("2026-10");
+  await page
+    .getByRole("button", { name: "Set overall budget", exact: true })
+    .click();
+  await page.getByLabel("Budget amount (GBP)").fill("10");
+  await page.getByRole("button", { name: "Save budget", exact: true }).click();
+  await expect(
+    page.getByRole("article", { name: "Overall budget", exact: true }),
+  ).toContainText("£5.50 over budget");
+  await page
+    .getByRole("button", { name: "Set Food shopping budget", exact: true })
+    .click();
+  await page.getByLabel("Budget amount (GBP)").fill("20");
+  await page.getByRole("button", { name: "Save budget", exact: true }).click();
+  await expect(
+    page.getByRole("article", { name: "Food shopping", exact: true }),
+  ).toContainText("£4.50 remaining");
+  await a11y(page);
+  await page.screenshot({ path: ".data/budgets-phone.png", fullPage: true });
+  await page
+    .getByRole("button", { name: "Edit overall budget", exact: true })
+    .click();
+  await page.getByLabel("Budget amount (GBP)").fill("0");
+  await page.getByRole("button", { name: "Save budget", exact: true }).click();
+  await expect(
+    page.getByRole("article", { name: "Overall budget", exact: true }),
+  ).toContainText("£15.50 over budget");
+  await page
+    .getByRole("button", { name: "Edit overall budget", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Remove budget limit", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Remove limit", exact: true }).click();
+  await expect(
+    page.getByRole("article", { name: "Overall budget", exact: true }),
+  ).toContainText("No limit set");
 });
 
 test("phone forms preserve input and retry a lost successful save without duplicates", async ({

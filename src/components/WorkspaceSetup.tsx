@@ -89,7 +89,7 @@ export function WorkspaceSetup({
       <p>
         {preferences
           ? "Keep your workspace in step with your everyday."
-          : "Choose your currency and timezone. Then you're ready to record your first expense."}
+          : "Choose your currency and timezone. Then you're ready to record your first entry or budget."}
       </p>
       <form noValidate onSubmit={submit} aria-busy={pending}>
         {error && <StatusMessage error>{error}</StatusMessage>}
@@ -106,7 +106,7 @@ export function WorkspaceSetup({
           hint={
             preferences?.currencyLocked
               ? "Your currency is fixed because you have recorded an expense."
-              : "This is fixed once you save your first expense."
+              : "This is fixed once you save your first entry or budget."
           }
           required
         >

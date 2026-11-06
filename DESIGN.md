@@ -132,3 +132,8 @@ Shared entry forms, histories and delete dialogs own expense, income and refund 
 ### Monthly overview
 
 `MonthlyOverview.tsx` owns a four-column definition list, a distinct income-minus-spending panel and an equivalent category table. It uses the shared semantic theme, native month input, and two-column metric reflow on phones. Category tables scroll inside their own container. No bank-balance claim or fabricated budget appears.
+
+
+### Budgets
+
+`Budgets.tsx` uses a single overall budget ruler followed by category rows. Progress is bounded from zero to 100% with exact remaining/over text. Zero caps remain distinct from absent limits. Each month and scope can be set, edited or removed in a native dialog, using shared inputs, dirty guards and confirmation. Archived categories with budgets or spending remain visible.

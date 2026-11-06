@@ -1,5 +1,6 @@
 import { randomUUID, createHash } from "node:crypto";
 import type Database from "better-sqlite3";
+import { initializeBudgets } from "./budgets.js";
 import { initializeEntries } from "./entries.js";
 import {
   CURRENCIES,
@@ -49,6 +50,7 @@ export function initializeLedger(db: Database.Database) {
     );
   `);
   initializeEntries(db);
+  initializeBudgets(db);
 }
 export function createLedger(db: Database.Database) {
   const preferences = (owner: string) =>
@@ -103,7 +105,7 @@ export function createLedger(db: Database.Database) {
       if (current.currencyLocked && current.currency !== body.currency)
         throw new LedgerError(
           409,
-          "Currency is fixed after the first expense.",
+          "Currency is fixed after the first entry or budget.",
         );
       db.prepare(
         "UPDATE workspace_preferences SET currency = ?, timezone = ? WHERE owner = ?",

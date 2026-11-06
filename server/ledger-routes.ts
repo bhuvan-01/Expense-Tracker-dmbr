@@ -1,4 +1,5 @@
 import express from "express";
+import { budgets } from "./budgets.js";
 import { summaries } from "./summary.js";
 import type Database from "better-sqlite3";
 import { fromNodeHeaders } from "better-auth/node";
@@ -41,6 +42,12 @@ export function ledgerRoutes(auth: Auth, database: Database.Database) {
       return res.status(400).json({ error: "Send a valid JSON object." });
     next();
   });
+  router.get("/budgets", (req, res) =>
+    res.json(budgets(database).read(res.locals.owner, req.query.month)),
+  );
+  router.put("/budgets", (req, res) =>
+    res.json(budgets(database).save(res.locals.owner, req.body)),
+  );
   router.get("/summary", (req, res) =>
     res.json(summaries(database).month(res.locals.owner, req.query.month)),
   );

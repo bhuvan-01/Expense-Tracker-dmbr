@@ -11,6 +11,7 @@ import { Brand } from "../components/Brand";
 import { authClient } from "../lib/auth-client";
 import { api } from "../lib/api";
 import { entryLabels, type EntryKind, type MoneyEntry } from "../lib/entries";
+import { Budgets } from "../components/Budgets";
 import { MonthlyOverview } from "../components/MonthlyOverview";
 import { CategoryManager } from "../components/CategoryManager";
 import type { Category, Expense, Workspace } from "../lib/ledger";
@@ -31,7 +32,9 @@ export function WorkspacePage() {
   const [pending, setPending] = useState(false),
     [attempt, setAttempt] = useState(0),
     [revision, setRevision] = useState(0);
-  const [view, setView] = useState<EntryKind | "overview">("expense");
+  const [view, setView] = useState<EntryKind | "overview" | "budgets">(
+    "expense",
+  );
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [editor, setEditor] = useState<{
       expense: MoneyEntry | null;
@@ -276,11 +279,40 @@ export function WorkspacePage() {
                           : "Refunds"}
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    aria-current={view === "budgets" ? "page" : undefined}
+                    onClick={() => {
+                      setView("budgets");
+                      setNotice("");
+                    }}
+                  >
+                    Budgets
+                  </button>
                   <button type="button" onClick={() => setCategoriesOpen(true)}>
                     Manage categories
                   </button>
                 </nav>
-                {view === "overview" ? (
+                {view === "budgets" ? (
+                  <Budgets
+                    workspace={workspace}
+                    revision={revision}
+                    onSaved={() => {
+                      setRevision((value) => value + 1);
+                      setWorkspace((current) =>
+                        current
+                          ? {
+                              ...current,
+                              preferences: {
+                                ...current.preferences,
+                                currencyLocked: 1,
+                              },
+                            }
+                          : current,
+                      );
+                    }}
+                  />
+                ) : view === "overview" ? (
                   <MonthlyOverview workspace={workspace} revision={revision} />
                 ) : (
                   <ExpenseHistory

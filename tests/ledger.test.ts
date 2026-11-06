@@ -739,3 +739,112 @@ test("monthly summaries share exact dated events, include old-purchase refunds a
   for (const month of ["2026-13", "2026-1", "bad", "2200-01"])
     assert.equal((await f.request(`/summary?month=${month}`)).status, 400);
 });
+
+test("monthly budgets support zero, safe retries, versioned removal and private independent category limits", async (t) => {
+  const f = await fixture(t),
+    w = await f.setup();
+  const body = {
+    month: "2026-10",
+    scope: "",
+    currency: "GBP",
+    amount: "10",
+    version: 0,
+  };
+  let response = await f.request("/budgets", "PUT", body);
+  assert.equal(response.status, 200, await response.clone().text());
+  let data = await response.json();
+  assert.equal(data.items[0].limitMinor, 1000);
+  assert.equal(data.items[0].version, 1);
+  assert.equal((await f.request("/budgets", "PUT", body)).status, 200);
+  assert.equal(
+    (await f.request("/budgets", "PUT", { ...body, amount: "11" })).status,
+    409,
+  );
+  assert.equal((await f.setup()).preferences.currencyLocked, 1);
+  assert.equal(
+    (await f.request("/workspace", "PUT", { currency: "USD", timezone: "UTC" }))
+      .status,
+    409,
+  );
+  assert.equal(
+    (await f.request("/budgets", "PUT", { ...body, amount: "0", version: 1 }))
+      .status,
+    200,
+  );
+  const original = (await (
+    await f.request("/expenses", "POST", f.values(w.categories[0].id, "5"))
+  ).json()) as Expense;
+  data = await (await f.request("/budgets?month=2026-10")).json();
+  assert.equal(data.items[0].spentMinor, 500);
+  assert.equal(data.summary.totals.netMinor, 500);
+  assert.equal(data.items[0].limitMinor, 0);
+  response = await f.request("/budgets", "PUT", {
+    ...body,
+    scope: w.categories[0].id,
+    amount: "20",
+  });
+  data = await response.json();
+  assert.equal(data.items[0].limitMinor, 0);
+  assert.equal(
+    data.items.find(
+      (item: { scope: string }) => item.scope === w.categories[0].id,
+    ).limitMinor,
+    2000,
+  );
+  await f.request("/refunds", "POST", {
+    ...f.values(w.categories[0].id, "2"),
+    expenseId: original.id,
+  });
+  data = await (await f.request("/budgets?month=2026-10")).json();
+  assert.equal(data.items[0].spentMinor, 300);
+  response = await f.request("/budgets", "PUT", {
+    ...body,
+    amount: null,
+    version: 2,
+  });
+  data = await response.json();
+  assert.equal(data.items[0].limitMinor, null);
+  assert.equal(data.items[0].version, 3);
+  assert.equal((await f.request("/budgets", "PUT", body)).status, 409);
+  assert.equal(
+    (await (await f.request("/budgets?month=2026-11")).json()).items[0]
+      .limitMinor,
+    null,
+  );
+  for (const amount of ["-1", "0.000", "1.001", "NaN", "10000000000"])
+    assert.equal(
+      (await f.request("/budgets", "PUT", { ...body, amount, version: 3 }))
+        .status,
+      400,
+    );
+  assert.equal(
+    (
+      await f.request("/budgets", "PUT", {
+        ...body,
+        currency: "USD",
+        version: 3,
+      })
+    ).status,
+    409,
+  );
+  const other = await f.signup("budget-other@example.com");
+  await f.setup("GBP", other);
+  assert.equal(
+    (
+      await f.request(
+        "/budgets",
+        "PUT",
+        { ...body, scope: w.categories[0].id },
+        { cookie: other },
+      )
+    ).status,
+    404,
+  );
+  data = await (
+    await f.request("/budgets?month=2026-10", "GET", undefined, {
+      cookie: other,
+    })
+  ).json();
+  assert.equal(data.items[0].limitMinor, null);
+  assert.equal(data.items[0].spentMinor, 0);
+});

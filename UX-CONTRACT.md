@@ -128,3 +128,8 @@ Income uses positive exact minor units without an expense category. Refunds must
 ## Monthly overview implementation
 
 `server/summary.ts` owns all dated-event totals. Month selection cancels superseded reads and clears old figures until the selected month loads. Previous-period comparison uses calendar months. Refunds are positive receipts that reduce net spending in their own month; the difference is recorded income minus net spending, never a bank balance. Empty months show zero totals with explicit guidance; failures offer retry. Category tables expose the exact values without relying on graphics.
+
+
+## Budget implementation
+
+Monthly overall/category caps are independent, use the same net-spending calculation as Overview, and never roll forward silently. Zero is a valid no-spending limit; null means unset. Server-owned versions detect stale changes and survive removal to avoid stale recreation. Identical one-version save retries are safe after a lost response. Saved budgets lock workspace currency. Dirty editor values remain in memory on errors; removal confirms its month/scope while preserving entries.

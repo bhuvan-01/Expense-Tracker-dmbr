@@ -8,7 +8,7 @@ Complete and verify one milestone before starting the next. Commit and push each
 | 2 | Expense entry/history, edit/delete, starter/custom categories, filters and ownership checks | Complete — delivered on `codex/expense-entry` |
 | 3 | Income, refunds and category rename/archive | Complete |
 | 4 | Monthly overview using one shared calculation service | Complete |
-| 5 | Overall and category budgets | Planned |
+| 5 | Overall and category budgets | Complete |
 | 6 | Reports and CSV export | Planned |
 | 7 | Email verification/recovery, production privacy/data controls, launch checks | Required before public launch |
 
@@ -47,3 +47,8 @@ Verification: 23 backend/domain/design tests, 8 Chrome browser journeys, product
 ## Milestone 4 — 6 November 2026
 
 Owner-scoped monthly overview uses one shared dated-event calculation service. Exact income, expenses, refunds, net spending and income minus net spending agree with category/day breakdowns. Includes previous-month comparison, native month selection and empty/loading/error/retry states. Refunds of older purchases affect the refund month.
+
+
+## Milestone 5 — 6 November 2026
+
+Monthly overall/category budgets with exact shared spending totals, zero limits, bounded accessible progress, remaining/over text, versioned edit/removal, loss-safe identical retries and currency consistency. Archive preserves referenced budgets.
