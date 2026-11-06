@@ -11,6 +11,7 @@ import { Brand } from "../components/Brand";
 import { authClient } from "../lib/auth-client";
 import { api } from "../lib/api";
 import { entryLabels, type EntryKind, type MoneyEntry } from "../lib/entries";
+import { Reports } from "../components/Reports";
 import { Budgets } from "../components/Budgets";
 import { MonthlyOverview } from "../components/MonthlyOverview";
 import { CategoryManager } from "../components/CategoryManager";
@@ -32,9 +33,9 @@ export function WorkspacePage() {
   const [pending, setPending] = useState(false),
     [attempt, setAttempt] = useState(0),
     [revision, setRevision] = useState(0);
-  const [view, setView] = useState<EntryKind | "overview" | "budgets">(
-    "expense",
-  );
+  const [view, setView] = useState<
+    EntryKind | "overview" | "budgets" | "reports"
+  >("expense");
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [editor, setEditor] = useState<{
       expense: MoneyEntry | null;
@@ -289,11 +290,23 @@ export function WorkspacePage() {
                   >
                     Budgets
                   </button>
+                  <button
+                    type="button"
+                    aria-current={view === "reports" ? "page" : undefined}
+                    onClick={() => {
+                      setView("reports");
+                      setNotice("");
+                    }}
+                  >
+                    Reports
+                  </button>
                   <button type="button" onClick={() => setCategoriesOpen(true)}>
                     Manage categories
                   </button>
                 </nav>
-                {view === "budgets" ? (
+                {view === "reports" ? (
+                  <Reports workspace={workspace} revision={revision} />
+                ) : view === "budgets" ? (
                   <Budgets
                     workspace={workspace}
                     revision={revision}

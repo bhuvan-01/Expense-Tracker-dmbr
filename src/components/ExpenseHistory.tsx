@@ -11,6 +11,7 @@ import {
   X,
   LoaderCircle,
 } from "lucide-react";
+import { downloadCsv } from "../lib/download";
 import { api, ApiError } from "../lib/api";
 import {
   dateLabel,
@@ -66,6 +67,25 @@ export function ExpenseHistory({
   onEdit: (expense: Expense) => void;
   onDelete: (expense: Expense) => void;
 }) {
+  const [exporting, setExporting] = useState(false),
+    [exportError, setExportError] = useState(""),
+    [exportNotice, setExportNotice] = useState("");
+  async function exportView() {
+    if (exporting) return;
+    setExporting(true);
+    setExportError("");
+    setExportNotice("");
+    try {
+      await downloadCsv(kind, { ...filters, q: query });
+      setExportNotice(
+        "CSV download started. It contains all matching entries, across every page.",
+      );
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Unable to export.");
+    } finally {
+      setExporting(false);
+    }
+  }
   const labels = entryLabels[kind];
   const [filters, setFilters] = useState<ExpenseFilters>(() => readFilters());
   const [query, setQuery] = useState(""),
@@ -174,12 +194,34 @@ export function ExpenseHistory({
                 : "Refunds are linked to purchases and reduce spending on the refund date."}
           </p>
         </div>
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={exporting || pending || !list?.total}
+          onClick={() => void exportView()}
+        >
+          {exporting ? "Preparing CSV…" : "Export this view"}
+        </button>
         {active && (
           <button type="button" className="text-button" onClick={clear}>
             Clear filters
           </button>
         )}
       </div>
+      {exportError && (
+        <StatusMessage error>
+          {exportError}{" "}
+          <button
+            className="text-button"
+            type="button"
+            disabled={exporting}
+            onClick={() => void exportView()}
+          >
+            Retry export
+          </button>
+        </StatusMessage>
+      )}
+      {exportNotice && <StatusMessage>{exportNotice}</StatusMessage>}
       <div className="ledger-filters">
         <div className="field history-search">
           <label htmlFor="expense-search">Search {labels.plural}</label>

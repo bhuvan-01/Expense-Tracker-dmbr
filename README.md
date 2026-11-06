@@ -122,3 +122,6 @@ Income and refunds have the same create, get, search, edit and versioned delete 
 
 
 `GET /api/budgets?month=YYYY-MM` returns the shared monthly summary and each category/overall cap with its current version. `PUT /api/budgets` accepts `month`, `scope` (empty for overall, category ID otherwise), confirmed `currency`, decimal-string `amount` (zero allowed; null removes a limit), and numeric `version` (zero for new). Overall/category limits are independent and apply only to the selected month. Saved budgets lock currency. Removed limits retain version history to prevent stale recreation.
+
+
+`POST /api/export` accepts `kind` (`all`, `expense`, `income`, `refund`) and optional `filters` using history date/category/search/sort parameters. CSV includes all matching pages (maximum 10,000 entries); narrow dates when larger. It includes record type, original purchase ID, positive amount, signed net-spending effect and income received. User-controlled text is escaped against spreadsheet formulas; export is intended for review, not lossless reimport. CSV contains personal financial data: store downloaded copies privately. The Reports screen exports all entry types for the chosen month.

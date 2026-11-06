@@ -137,3 +137,8 @@ Shared entry forms, histories and delete dialogs own expense, income and refund 
 ### Budgets
 
 `Budgets.tsx` uses a single overall budget ruler followed by category rows. Progress is bounded from zero to 100% with exact remaining/over text. Zero caps remain distinct from absent limits. Each month and scope can be set, edited or removed in a native dialog, using shared inputs, dirty guards and confirmation. Archived categories with budgets or spending remain visible.
+
+
+### Reports and data downloads
+
+`Reports.tsx` owns native month selection, a daily report table with exact monthly totals and a CSV download action. `ExpenseHistory.tsx` exports every matching row across pages. Table regions are named/focusable for horizontal keyboard scrolling, with visible instructions. Export progress/errors/success use the shared status language. Budgets initially show overall, configured and used categories; Show all categories reveals remaining choices.

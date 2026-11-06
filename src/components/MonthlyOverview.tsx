@@ -128,6 +128,10 @@ export function MonthlyOverview({
               Net spending = expenses − refunds recorded during this month. An
               older purchase refunded this month can make a category negative.
             </p>
+            <p className="table-scroll-hint">
+              On smaller screens, scroll the table to see every column. Keyboard
+              users can focus the table region and use arrow keys.
+            </p>
             {data.categories.length ? (
               <div
                 className="report-table-wrap"

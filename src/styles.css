@@ -116,6 +116,8 @@ button:active:not(:disabled) {
 .skip-link {
   position: fixed;
   top: -100px;
+  opacity: 0;
+  pointer-events: none;
   left: 8px;
   z-index: 100;
   padding: 10px 16px;
@@ -123,6 +125,8 @@ button:active:not(:disabled) {
 }
 .skip-link:focus {
   top: 8px;
+  opacity: 1;
+  pointer-events: auto;
 }
 .brand {
   display: inline-flex;
@@ -1830,5 +1834,37 @@ button:active:not(:disabled) {
   .budget-row-heading {
     align-items: start;
     flex-direction: column;
+  }
+}
+
+.report-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin: 1.5rem 0 1rem;
+}
+.report-actions h3 {
+  margin: 0 0 0.4rem;
+}
+.report-actions p,
+.table-scroll-hint {
+  color: var(--color-muted);
+}
+.table-scroll-hint {
+  margin-top: 1rem;
+  font-size: 0.9rem;
+}
+.report-table tfoot {
+  font-weight: 700;
+  background: var(--color-primary-soft);
+}
+@media (max-width: 600px) {
+  .report-actions {
+    flex-direction: column;
+    align-items: start;
+  }
+  .history-title-row {
+    flex-wrap: wrap;
   }
 }

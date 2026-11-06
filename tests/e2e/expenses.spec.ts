@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
@@ -258,6 +259,38 @@ test("desktop setup, expense CRUD, category creation, search, filters and totals
   await expect(
     page.getByRole("article", { name: "Overall budget", exact: true }),
   ).toContainText("No limit set");
+  await page.getByRole("button", { name: "Reports", exact: true }).click();
+  await page.getByLabel("Report month", { exact: true }).fill("2026-11");
+  await expect(page.locator(".report-table tfoot")).toContainText("£2,005.50");
+  await a11y(page);
+  const downloadEvent = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Download monthly CSV", exact: true })
+    .click();
+  const download = await downloadEvent;
+  await download.saveAs(".data/month-report-test.csv");
+  const csv = await readFile(".data/month-report-test.csv", "utf8");
+  expect(csv).toContain('"income"');
+  expect(csv).toContain('"refund"');
+  expect(csv).toContain("Monthly salary");
+  expect(csv).not.toContain('"expense"');
+  await expect(
+    page.getByRole("status").filter({ hasText: "CSV download started" }),
+  ).toBeVisible();
+  await page.screenshot({ path: ".data/reports-phone.png", fullPage: true });
+  await page.getByRole("button", { name: "Expenses", exact: true }).click();
+  await page.getByLabel("Search expenses").fill("Corner market");
+  await expect(page.locator(".result-count")).toContainText(
+    "1 expense matching",
+  );
+  const filteredEvent = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Export this view", exact: true })
+    .click();
+  await (await filteredEvent).saveAs(".data/history-export-test.csv");
+  expect(await readFile(".data/history-export-test.csv", "utf8")).toContain(
+    "Corner market",
+  );
 });
 
 test("phone forms preserve input and retry a lost successful save without duplicates", async ({

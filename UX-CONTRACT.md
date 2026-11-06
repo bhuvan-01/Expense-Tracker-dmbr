@@ -133,3 +133,8 @@ Income uses positive exact minor units without an expense category. Refunds must
 ## Budget implementation
 
 Monthly overall/category caps are independent, use the same net-spending calculation as Overview, and never roll forward silently. Zero is a valid no-spending limit; null means unset. Server-owned versions detect stale changes and survive removal to avoid stale recreation. Identical one-version save retries are safe after a lost response. Saved budgets lock workspace currency. Dirty editor values remain in memory on errors; removal confirms its month/scope while preserving entries.
+
+
+## Reports and export implementation
+
+Reports reuse the overview calculation service and expose daily/month totals. CSV export uses exact money strings, positive entry amounts plus explicit signed net-spending effects, type and original-purchase linkage. Exports include all matching pages, at most 10,000 entries, with server-owned account isolation, origin/session checks, no-store responses and spreadsheet-formula escaping. History exports snapshot the current visible search/filter scope. Busy exports do not claim completion until a blob is received; status says download started, because browser disk persistence is outside the app. Monthly selectors are locked while exporting to avoid ambiguous scope.

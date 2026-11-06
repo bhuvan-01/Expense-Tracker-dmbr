@@ -1,4 +1,5 @@
 import express from "express";
+import { exportCsv } from "./export.js";
 import { budgets } from "./budgets.js";
 import { summaries } from "./summary.js";
 import type Database from "better-sqlite3";
@@ -41,6 +42,14 @@ export function ledgerRoutes(auth: Auth, database: Database.Database) {
     )
       return res.status(400).json({ error: "Send a valid JSON object." });
     next();
+  });
+  router.post("/export", (req, res) => {
+    const csv = exportCsv(database, res.locals.owner, req.body);
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=expense-tracker.csv",
+    );
+    return res.type("text/csv").send(csv);
   });
   router.get("/budgets", (req, res) =>
     res.json(budgets(database).read(res.locals.owner, req.query.month)),

@@ -192,6 +192,7 @@ export function Budgets({
   revision: number;
   onSaved: () => void;
 }) {
+  const [showAll, setShowAll] = useState(false);
   const [month, setMonth] = useState(() =>
     todayIn(workspace.preferences.timezone!).slice(0, 7),
   );
@@ -278,9 +279,10 @@ export function Budgets({
           {data.items
             .filter(
               (budget) =>
-                !budget.archived ||
+                budget.scope === "" ||
                 budget.limitMinor !== null ||
-                budget.spentMinor !== 0,
+                budget.spentMinor !== 0 ||
+                (showAll && !budget.archived),
             )
             .map((budget) => {
               const remaining =
@@ -354,6 +356,16 @@ export function Budgets({
               );
             })}
         </div>
+      )}
+      {data && (
+        <button
+          type="button"
+          className="secondary-button"
+          aria-expanded={showAll}
+          onClick={() => setShowAll(!showAll)}
+        >
+          {showAll ? "Show active budgets only" : "Show all categories"}
+        </button>
       )}
       {editing && (
         <BudgetEditor

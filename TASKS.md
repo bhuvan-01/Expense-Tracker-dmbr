@@ -9,7 +9,7 @@ Complete and verify one milestone before starting the next. Commit and push each
 | 3 | Income, refunds and category rename/archive | Complete |
 | 4 | Monthly overview using one shared calculation service | Complete |
 | 5 | Overall and category budgets | Complete |
-| 6 | Reports and CSV export | Planned |
+| 6 | Reports and CSV export | Complete |
 | 7 | Email verification/recovery, production privacy/data controls, launch checks | Required before public launch |
 
 ## Milestone 1 decisions — 4 November 2026
@@ -52,3 +52,8 @@ Owner-scoped monthly overview uses one shared dated-event calculation service. E
 ## Milestone 5 — 6 November 2026
 
 Monthly overall/category budgets with exact shared spending totals, zero limits, bounded accessible progress, remaining/over text, versioned edit/removal, loss-safe identical retries and currency consistency. Archive preserves referenced budgets.
+
+
+## Milestone 6 — 6 November 2026
+
+Monthly daily reports and CSV downloads for a month or filtered expense/income/refund history. Exact signed spending/income columns, cross-page export, linked purchase IDs, private scopes, formula escaping and download recovery. Phone tables have keyboard-scroll regions and visible hints.

@@ -848,3 +848,90 @@ test("monthly budgets support zero, safe retries, versioned removal and private 
   assert.equal(data.items[0].limitMinor, null);
   assert.equal(data.items[0].spentMinor, 0);
 });
+
+test("CSV exports are private, cover every filtered page and neutralize spreadsheet formulas", async (t) => {
+  const f = await fixture(t),
+    w = await f.setup();
+  const body = {
+    ...f.values(w.categories[0].id, "25"),
+    merchant: "=SUM(1,2)",
+    note: ' \t@formula\nA "quoted", note',
+  };
+  const original = (await (
+    await f.request("/expenses", "POST", body)
+  ).json()) as Expense;
+  await f.request("/refunds", "POST", {
+    ...body,
+    amount: "5",
+    expenseId: original.id,
+    date: "2026-11-01",
+  });
+  await f.request("/income", "POST", {
+    ...body,
+    amount: "100",
+    date: "2026-11-01",
+  });
+  let response = await f.request("/export", "POST", {
+    kind: "all",
+    filters: { from: "2026-11-01", to: "2026-11-30" },
+  });
+  assert.equal(response.status, 200, await response.clone().text());
+  assert.match(response.headers.get("content-type") || "", /text\/csv/);
+  assert.match(response.headers.get("cache-control") || "", /no-store/);
+  let csv = await response.text();
+  assert.ok(csv.includes('"refund"'));
+  assert.ok(csv.includes('"income"'));
+  assert.ok(!csv.includes('"expense"'));
+  assert.ok(csv.includes('"\'=SUM(1,2)"'));
+  assert.ok(csv.includes('"\'@formula\nA ""quoted"", note"'));
+  assert.ok(csv.includes("-5.00,0.00"));
+  assert.ok(csv.includes("0.00,100.00"));
+  assert.ok(csv.includes(original.id));
+  const other = await f.signup("csv-other@example.com");
+  await f.setup("GBP", other);
+  csv = await (
+    await f.request("/export", "POST", { kind: "all" }, { cookie: other })
+  ).text();
+  assert.ok(!csv.includes(original.id));
+  for (let index = 0; index < 26; index++)
+    assert.equal(
+      (
+        await f.request("/expenses", "POST", {
+          ...body,
+          merchant: "Export pagination",
+          amount: "0.01",
+        })
+      ).status,
+      201,
+    );
+  response = await f.request("/export", "POST", {
+    kind: "expense",
+    filters: { q: "Export pagination", page: 2 },
+  });
+  csv = await response.text();
+  assert.equal((csv.match(/"Export pagination"/g) || []).length, 26);
+  assert.equal(
+    (await f.request("/export", "POST", { kind: ["expense"] })).status,
+    400,
+  );
+  assert.equal(
+    (await f.request("/export", "POST", { kind: "all", filters: [] })).status,
+    400,
+  );
+  assert.equal(
+    (await f.request("/export", "POST", { kind: "all" }, { cookie: "" }))
+      .status,
+    401,
+  );
+  assert.equal(
+    (
+      await f.request(
+        "/export",
+        "POST",
+        { kind: "all" },
+        { origin: "https://elsewhere.example" },
+      )
+    ).status,
+    403,
+  );
+});
