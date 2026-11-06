@@ -152,6 +152,52 @@ test("desktop setup, expense CRUD, category creation, search, filters and totals
     page.getByRole("row").filter({ hasText: "Pet shop" }),
   ).not.toBeVisible();
   await expect(page.locator(".history-total")).toContainText("£15.50");
+  await page
+    .getByRole("button", { name: "Record refund for Corner market" })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "Record refund", exact: true }),
+  ).toBeVisible();
+  await page.getByLabel("Amount (GBP)", { exact: true }).fill("5.50");
+  await page.getByRole("button", { name: "Save refund", exact: true }).click();
+  await page.getByRole("button", { name: "Refunds", exact: true }).click();
+  await expect(page.locator(".history-total")).toContainText("£5.50");
+  await a11y(page);
+  await page.getByRole("button", { name: "Income", exact: true }).click();
+  await page.getByRole("button", { name: "Add income", exact: true }).click();
+  await page.getByLabel("Amount (GBP)", { exact: true }).fill("2000");
+  await page
+    .getByLabel("Source or description (optional)")
+    .fill("Monthly salary");
+  await page.getByRole("button", { name: "Save income", exact: true }).click();
+  await expect(page.locator(".history-total")).toContainText("£2,000.00");
+  await page
+    .getByRole("button", { name: "Manage categories", exact: true })
+    .click();
+  await page.getByLabel("Choose category").selectOption({ label: "Groceries" });
+  await page.getByLabel("Category name", { exact: true }).fill("Food shopping");
+  await page.getByRole("button", { name: "Save name", exact: true }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Category renamed" }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Archive category", exact: true })
+    .click();
+  await page
+    .getByRole("dialog", { name: "Archive Food shopping?" })
+    .getByRole("button", { name: "Archive category", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Restore category", exact: true }),
+  ).toBeVisible();
+  await a11y(page);
+  await page
+    .getByRole("button", { name: "Close categories", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Expenses", exact: true }).click();
+  await expect(
+    page.getByRole("row").filter({ hasText: "Corner market" }),
+  ).toContainText("Food shopping");
 });
 
 test("phone forms preserve input and retry a lost successful save without duplicates", async ({

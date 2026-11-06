@@ -122,3 +122,8 @@ Controls use 8px radii, content surfaces 12px. Avoid making every number a separ
 - Do not encode expense/refund/income distinctions using color alone.
 - Do not spread one entry form across several unnecessary steps.
 - Keep destructive data controls separate from ordinary preferences.
+
+
+### Income, refunds and category maintenance
+
+Shared entry forms, histories and delete dialogs own expense, income and refund flows. Text labels distinguish the entry kinds. A wrapping navigation row provides working destinations; Manage categories opens a native modal with versioned rename/archive/restore controls. Archived labels remain in history and filters. Refund forms name the original purchase and remaining refundable amount. Existing CSS tokens own all styling; platform date/select popups remain native.

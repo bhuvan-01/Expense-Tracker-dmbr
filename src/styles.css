@@ -1621,3 +1621,52 @@ button:active:not(:disabled) {
     flex-basis: 100%;
   }
 }
+
+.ledger-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 1rem 0;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.ledger-navigation button {
+  font: inherit;
+  font-weight: 600;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  color: var(--color-muted);
+  padding: 0.65rem 0.9rem;
+  cursor: pointer;
+  min-height: 44px;
+}
+.ledger-navigation button[aria-current] {
+  background: var(--color-primary);
+  color: white;
+}
+.ledger-navigation button:hover {
+  border-color: var(--color-border);
+}
+.category-manager {
+  padding: 1.5rem;
+}
+.category-manager form {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+.refund-context {
+  margin-bottom: 1rem;
+  padding: 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+}
+.actions-cell {
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .expense-table .actions-cell {
+    min-width: 132px;
+  }
+}

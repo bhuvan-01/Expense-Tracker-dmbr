@@ -3,11 +3,13 @@ import type Database from "better-sqlite3";
 import { fromNodeHeaders } from "better-auth/node";
 import type { createAuthentication } from "./auth.js";
 import { createLedger, LedgerError } from "./ledger.js";
+import { cashEntries, type CashKind } from "./entries.js";
 
 type Auth = Awaited<ReturnType<typeof createAuthentication>>["auth"];
 export function ledgerRoutes(auth: Auth, database: Database.Database) {
   const router = express.Router();
   const ledger = createLedger(database);
+  const cash = cashEntries(database);
   router.use(async (req, res, next) => {
     const session = await auth.api.getSession({
       headers: fromNodeHeaders(req.headers),
@@ -47,6 +49,46 @@ export function ledgerRoutes(auth: Auth, database: Database.Database) {
   router.post("/categories", (req, res) =>
     res.status(201).json(ledger.addCategory(res.locals.owner, req.body)),
   );
+  router.patch("/categories/:id", (req, res) =>
+    res.json(
+      cash.categoryUpdate(res.locals.owner, String(req.params.id), req.body),
+    ),
+  );
+  for (const kind of ["income", "refund"] as CashKind[]) {
+    const path = kind === "income" ? "/income" : "/refunds";
+    router.get(path, (req, res) =>
+      res.json(cash.list(res.locals.owner, kind, req.query)),
+    );
+    router.post(`${path}/search`, (req, res) =>
+      res.json(cash.list(res.locals.owner, kind, req.body)),
+    );
+    router.get(`${path}/:id`, (req, res) =>
+      res.json(cash.get(res.locals.owner, kind, String(req.params.id))),
+    );
+    router.post(path, (req, res) => {
+      const result = cash.create(
+        res.locals.owner,
+        kind,
+        req.body,
+        String(req.headers["idempotency-key"] || ""),
+      );
+      return res.status(result.replay ? 200 : 201).json(result.entry);
+    });
+    router.patch(`${path}/:id`, (req, res) =>
+      res.json(
+        cash.update(res.locals.owner, kind, String(req.params.id), req.body),
+      ),
+    );
+    router.delete(`${path}/:id`, (req, res) => {
+      cash.remove(
+        res.locals.owner,
+        kind,
+        String(req.params.id),
+        req.body.version,
+      );
+      res.status(204).end();
+    });
+  }
   router.get("/expenses", (req, res) =>
     res.json(ledger.list(res.locals.owner, req.query)),
   );

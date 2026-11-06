@@ -10,6 +10,8 @@ import {
 import { Brand } from "../components/Brand";
 import { authClient } from "../lib/auth-client";
 import { api } from "../lib/api";
+import { entryLabels, type EntryKind, type MoneyEntry } from "../lib/entries";
+import { CategoryManager } from "../components/CategoryManager";
 import type { Category, Expense, Workspace } from "../lib/ledger";
 import { WorkspaceSetup } from "../components/WorkspaceSetup";
 import { ExpenseHistory } from "../components/ExpenseHistory";
@@ -28,10 +30,17 @@ export function WorkspacePage() {
   const [pending, setPending] = useState(false),
     [attempt, setAttempt] = useState(0),
     [revision, setRevision] = useState(0);
-  const [editor, setEditor] = useState<{ expense: Expense | null } | null>(
-      null,
-    ),
-    [deleting, setDeleting] = useState<Expense | null>(null);
+  const [view, setView] = useState<EntryKind>("expense");
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const [editor, setEditor] = useState<{
+      expense: MoneyEntry | null;
+      kind: EntryKind;
+      refundOf?: Expense;
+    } | null>(null),
+    [deleting, setDeleting] = useState<{
+      expense: Expense;
+      kind: EntryKind;
+    } | null>(null);
   const addButton = useRef<HTMLButtonElement>(null);
   const [settings, setSettings] = useState(false),
     [settingsDirty, setSettingsDirty] = useState(false),
@@ -91,9 +100,13 @@ export function WorkspacePage() {
   }
   const add = () => {
     setNotice("");
-    setEditor({ expense: null });
+    setEditor({
+      expense: null,
+      kind: view === "income" ? "income" : "expense",
+    });
   };
   function categoryAdded(category: Category) {
+    setRevision((value) => value + 1);
     setWorkspace((current) =>
       current
         ? {
@@ -110,7 +123,15 @@ export function WorkspacePage() {
     const editing = Boolean(editor?.expense);
     setEditor(null);
     setRevision((value) => value + 1);
-    setNotice(editing ? "Changes saved." : "Expense added.");
+    setNotice(
+      editing
+        ? "Changes saved."
+        : editor?.kind === "income"
+          ? "Income added."
+          : editor?.kind === "refund"
+            ? "Refund recorded."
+            : "Expense added.",
+    );
     setWorkspace((current) =>
       current
         ? {
@@ -186,7 +207,8 @@ export function WorkspacePage() {
                   className="primary-button add-expense"
                   onClick={add}
                 >
-                  <Plus size={18} aria-hidden="true" /> Add expense
+                  <Plus size={18} aria-hidden="true" />{" "}
+                  {view === "income" ? "Add income" : "Add expense"}
                 </button>
               )}
             </div>
@@ -203,7 +225,7 @@ export function WorkspacePage() {
                 <div className="ledger-context">
                   <span>
                     <ShieldCheck size={15} aria-hidden="true" /> Only your
-                    expenses appear here
+                    entries appear here
                   </span>
                   <span>
                     {workspace.preferences.currency}{" "}
@@ -224,21 +246,54 @@ export function WorkspacePage() {
                     </button>
                   </span>
                 </div>
+                <nav className="ledger-navigation" aria-label="Your ledger">
+                  {(["expense", "income", "refund"] as const).map((kind) => (
+                    <button
+                      type="button"
+                      key={kind}
+                      aria-current={view === kind ? "page" : undefined}
+                      onClick={() => {
+                        setView(kind);
+                        setNotice("");
+                        window.history.replaceState({}, "", "/app");
+                      }}
+                    >
+                      {kind === "expense"
+                        ? "Expenses"
+                        : kind === "income"
+                          ? "Income"
+                          : "Refunds"}
+                    </button>
+                  ))}
+                  <button type="button" onClick={() => setCategoriesOpen(true)}>
+                    Manage categories
+                  </button>
+                </nav>
                 <ExpenseHistory
+                  key={view}
+                  kind={view}
+                  onRefund={(expense) =>
+                    setEditor({
+                      expense: null,
+                      kind: "refund",
+                      refundOf: expense,
+                    })
+                  }
                   workspace={workspace}
                   revision={revision}
-                  onAdd={add}
+                  onAdd={view === "refund" ? () => setView("expense") : add}
                   onEdit={(expense) => {
                     setNotice("");
-                    setEditor({ expense });
+                    setEditor({ expense, kind: view });
                   }}
                   onDelete={(expense) => {
                     setNotice("");
-                    setDeleting(expense);
+                    setDeleting({ expense, kind: view });
                   }}
                 />
                 <p className="ledger-footnote">
-                  Recorded expenses only. Income, budgets, and reports are next.
+                  Expenses show gross spending. Refunds stay linked to purchases
+                  and reduce net spending in their recorded period.
                 </p>
               </>
             )}
@@ -248,6 +303,8 @@ export function WorkspacePage() {
       {editor && workspace && (
         <ExpenseForm
           expense={editor.expense}
+          kind={editor.kind}
+          refundOf={editor.refundOf}
           workspace={workspace}
           onClose={() => {
             setEditor(null);
@@ -259,7 +316,8 @@ export function WorkspacePage() {
       )}
       {deleting && (
         <DeleteExpenseDialog
-          expense={deleting}
+          expense={deleting.expense}
+          kind={deleting.kind}
           onClose={() => {
             setDeleting(null);
             setRevision((value) => value + 1);
@@ -267,8 +325,20 @@ export function WorkspacePage() {
           onDeleted={() => {
             setDeleting(null);
             setRevision((value) => value + 1);
-            setNotice("Expense deleted.");
+            setNotice(
+              `${entryLabels[deleting.kind].singular === "expense" ? "Expense" : deleting.kind === "income" ? "Income" : "Refund"} deleted.`,
+            );
             requestAnimationFrame(() => addButton.current?.focus());
+          }}
+        />
+      )}
+      {categoriesOpen && workspace && (
+        <CategoryManager
+          categories={workspace.categories}
+          onChanged={categoryAdded}
+          onClose={() => {
+            setCategoriesOpen(false);
+            setAttempt((value) => value + 1);
           }}
         />
       )}

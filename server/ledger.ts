@@ -1,5 +1,6 @@
 import { randomUUID, createHash } from "node:crypto";
 import type Database from "better-sqlite3";
+import { initializeEntries } from "./entries.js";
 import {
   CURRENCIES,
   STARTER_CATEGORIES,
@@ -47,6 +48,7 @@ export function initializeLedger(db: Database.Database) {
       PRIMARY KEY(owner, requestId)
     );
   `);
+  initializeEntries(db);
 }
 export function createLedger(db: Database.Database) {
   const preferences = (owner: string) =>
@@ -62,13 +64,24 @@ export function createLedger(db: Database.Database) {
     const seed = db.prepare(
       "INSERT OR IGNORE INTO expense_categories (id, owner, name) VALUES (?, ?, ?)",
     );
-    for (const name of STARTER_CATEGORIES) seed.run(randomUUID(), owner, name);
+    const seeded = db
+      .prepare(
+        "SELECT categoriesSeeded FROM workspace_preferences WHERE owner = ?",
+      )
+      .get(owner) as { categoriesSeeded: number };
+    if (!seeded.categoriesSeeded) {
+      for (const name of STARTER_CATEGORIES)
+        seed.run(randomUUID(), owner, name);
+      db.prepare(
+        "UPDATE workspace_preferences SET categoriesSeeded = 1 WHERE owner = ?",
+      ).run(owner);
+    }
     const prefs = preferences(owner);
     return {
       preferences: prefs,
       categories: db
         .prepare(
-          "SELECT id, name FROM expense_categories WHERE owner = ? ORDER BY name COLLATE NOCASE",
+          "SELECT id, name, archived, version FROM expense_categories WHERE owner = ? ORDER BY name COLLATE NOCASE",
         )
         .all(owner),
       today: todayIn(prefs.timezone || "UTC"),
@@ -105,17 +118,24 @@ export function createLedger(db: Database.Database) {
     workspace(owner);
     const existing = db
       .prepare(
-        "SELECT id, name FROM expense_categories WHERE owner = ? AND name = ? COLLATE NOCASE",
+        "SELECT id, name, archived, version FROM expense_categories WHERE owner = ? AND name = ? COLLATE NOCASE",
       )
       .get(owner, name);
-    if (existing) return existing;
+    if (existing) {
+      if ((existing as { archived: number }).archived)
+        throw new LedgerError(
+          409,
+          "This category is archived. Restore it in category settings first.",
+        );
+      return existing;
+    }
     const id = randomUUID();
     db.prepare(
       "INSERT INTO expense_categories (id, owner, name) VALUES (?, ?, ?)",
     ).run(id, owner, name);
-    return { id, name };
+    return { id, name, archived: 0, version: 1 };
   }
-  const selection = `SELECT e.id, e.amountMinor, e.currency, e.date, e.categoryId, c.name AS categoryName, e.merchant, e.paymentMethod, e.note, e.version FROM expenses e JOIN expense_categories c ON e.categoryId = c.id AND e.owner = c.owner`;
+  const selection = `SELECT e.id, e.amountMinor, e.currency, e.date, e.categoryId, c.name AS categoryName, e.merchant, e.paymentMethod, e.note, e.version, e.amountMinor - COALESCE((SELECT SUM(r.amountMinor) FROM cash_entries r WHERE r.owner = e.owner AND r.expenseId = e.id AND r.kind = 'refund'), 0) AS refundableMinor FROM expenses e JOIN expense_categories c ON e.categoryId = c.id AND e.owner = c.owner`;
   function get(owner: string, id: string) {
     const expense = db
       .prepare(`${selection} WHERE e.owner = ? AND e.id = ?`)
@@ -123,7 +143,11 @@ export function createLedger(db: Database.Database) {
     if (!expense) throw new LedgerError(404, "Expense not found.");
     return expense;
   }
-  function validated(owner: string, body: Record<string, unknown>) {
+  function validated(
+    owner: string,
+    body: Record<string, unknown>,
+    previousCategory = "",
+  ) {
     const prefs = preferences(owner);
     if (!prefs?.currency || !prefs.timezone)
       throw new LedgerError(
@@ -165,6 +189,15 @@ export function createLedger(db: Database.Database) {
       errors.categoryId = "Choose one of your categories.";
     if (Object.keys(errors).length)
       throw new LedgerError(400, "Check the highlighted fields.", errors);
+    const category = db
+      .prepare(
+        "SELECT archived FROM expense_categories WHERE owner = ? AND id = ?",
+      )
+      .get(owner, values.categoryId) as { archived: number };
+    if (category.archived && values.categoryId !== previousCategory)
+      throw new LedgerError(400, "Choose an active category.", {
+        categoryId: "This category is archived. Choose another category.",
+      });
     return {
       ...values,
       amountMinor: parseAmount(values.amount, prefs.currency)!,
@@ -240,10 +273,23 @@ export function createLedger(db: Database.Database) {
   );
   const update = db.transaction(
     (owner: string, id: string, body: Record<string, unknown>) => {
-      get(owner, id);
+      const current = get(owner, id) as { categoryId: string };
       if (!Number.isSafeInteger(body.version) || Number(body.version) < 1)
         throw new LedgerError(400, "An expense version is required.");
-      const values = validated(owner, body);
+      const values = validated(owner, body, current.categoryId);
+      const refunds = db
+        .prepare(
+          "SELECT COALESCE(SUM(amountMinor), 0) AS total, MIN(date) AS firstDate FROM cash_entries WHERE owner = ? AND expenseId = ? AND kind = 'refund'",
+        )
+        .get(owner, id) as { total: number; firstDate: string | null };
+      if (
+        values.amountMinor < refunds.total ||
+        (refunds.firstDate && values.date > refunds.firstDate)
+      )
+        throw new LedgerError(
+          409,
+          "This edit conflicts with recorded refunds. Correct those refunds first.",
+        );
       const result = db
         .prepare(
           "UPDATE expenses SET amountMinor = ?, date = ?, categoryId = ?, merchant = ?, paymentMethod = ?, note = ?, version = version + 1, updatedAt = ? WHERE owner = ? AND id = ? AND version = ?",
@@ -271,6 +317,17 @@ export function createLedger(db: Database.Database) {
   const remove = db.transaction(
     (owner: string, id: string, version: unknown) => {
       get(owner, id);
+      if (
+        db
+          .prepare(
+            "SELECT 1 FROM cash_entries WHERE owner = ? AND expenseId = ? AND kind = 'refund'",
+          )
+          .get(owner, id)
+      )
+        throw new LedgerError(
+          409,
+          "This expense has linked refunds. Delete its refunds first.",
+        );
       if (!Number.isSafeInteger(version) || Number(version) < 1)
         throw new LedgerError(400, "An expense version is required.");
       if (
@@ -286,7 +343,11 @@ export function createLedger(db: Database.Database) {
         );
     },
   );
-  function list(owner: string, filters: Record<string, unknown>) {
+  function list(
+    owner: string,
+    filters: Record<string, unknown>,
+    exportAll = false,
+  ) {
     const q = typeof filters.q === "string" ? filters.q.trim() : "";
     if (q.length > 120)
       throw new LedgerError(400, "Search using 120 characters or fewer.");
@@ -343,9 +404,14 @@ export function createLedger(db: Database.Database) {
           `SELECT COUNT(*) AS total, COALESCE(SUM(e.amountMinor), 0) AS totalMinor ${joined} WHERE ${where}`,
         )
         .get(...args) as { total: number; totalMinor: number };
-      const pageSize = 25,
+      if (exportAll && counts.total > 10000)
+        throw new LedgerError(
+          400,
+          "Narrow the date range to export up to 10,000 entries at a time.",
+        );
+      const pageSize = exportAll ? Math.max(1, counts.total) : 25,
         pages = Math.max(1, Math.ceil(counts.total / pageSize)),
-        page = Math.min(requested, pages);
+        page = exportAll ? 1 : Math.min(requested, pages);
       const items = db
         .prepare(
           `${selection} WHERE ${where} ORDER BY ${sortMap[sort]} LIMIT ? OFFSET ?`,

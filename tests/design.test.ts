@@ -8,7 +8,7 @@ test("documented palette matches the canonical runtime theme", () => {
     new URL("../src/styles.css", import.meta.url),
     "utf8",
   );
-  const palette = design.split("colors:\n")[1]?.split("typography:")[0];
+  const palette = design.split(/colors:\r?\n/)[1]?.split("typography:")[0];
   assert.ok(palette, "DESIGN.md must declare a palette");
   for (const [, name, hex] of palette.matchAll(
     /^  ([\w-]+): "(#[0-9a-f]+)"/gim,

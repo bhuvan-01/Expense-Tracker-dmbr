@@ -6,7 +6,7 @@ Complete and verify one milestone before starting the next. Commit and push each
 |---|---|---|
 | 1 | Signup, sign-in, sessions, protected workspace, sign-out | Complete — delivered on `codex/signup-signin` |
 | 2 | Expense entry/history, edit/delete, starter/custom categories, filters and ownership checks | Complete — delivered on `codex/expense-entry` |
-| 3 | Income, refunds and category rename/archive | Next |
+| 3 | Income, refunds and category rename/archive | Complete |
 | 4 | Monthly overview using one shared calculation service | Planned |
 | 5 | Overall and category budgets | Planned |
 | 6 | Reports and CSV export | Planned |
@@ -35,3 +35,10 @@ Verification on 4 November 2026: production build/typecheck, 12 backend/design t
 - Income/refunds, category archive/rename, budgets, reports/export and the public-launch privacy/email requirements remain future milestones.
 
 Verification on 5 November 2026: 22 backend/domain/design tests and 8 Chrome browser tests passed, including private-record isolation, exact totals, lost-save-response retries, stale mutations, cross-tab currency changes, desktop/mobile accessibility scans, settings, and modal focus recovery. Production build/typecheck, formatting, and strict UI audit passed. Desktop ledger and phone entry/history captures were visually inspected. Financial records, credentials, and generated captures remain excluded from Git. Full accessibility conformance and public production deployment are not claimed.
+
+
+## Milestone 3 — 6 November 2026
+
+Income CRUD, linked partial refunds, immutable refund ownership/linkage, category rename/archive/restore, and migration-safe starter category seeding implemented. Existing auth and expense workflows retained. Work lives in an isolated checkout to preserve the separate uncommitted bill-support prototype.
+
+Verification: 23 backend/domain/design tests, 8 Chrome browser journeys, production build/typecheck, formatting and strict UI contract audit. Income/refund/category flows are included in the desktop journey; previous private-data, retry, conflict and mobile coverage remains.

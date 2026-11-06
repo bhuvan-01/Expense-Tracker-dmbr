@@ -109,3 +109,10 @@ Authentication behavior is delegated to [Better Auth](https://better-auth.com/do
 Stack: React, TypeScript, Vite, Express, Better Auth, and better-sqlite3. The browser never stores credentials/session tokens or expense drafts in localStorage. Better Auth owns authentication security; the ledger router separately requires a verified session and exact origin/JSON checks for mutations. Do not replace these checks with a browser-only login flag.
 
 Completed feature milestones are committed and pushed to the GitHub repository on a `codex/` branch, with review links and validation evidence. Do not push credentials, account databases, screenshots containing user data, or failing work as completed.
+
+
+## Income, refunds and categories
+
+Income and refunds have the same create, get, search, edit and versioned delete APIs as expenses under `/api/income` and `/api/refunds`. Income has no expense category. Refund bodies include `expenseId` for an owned purchase; cumulative refunds cannot exceed that purchase or predate it. Refunded purchases cannot be deleted until refunds are removed. Changing a purchase amount/date must remain consistent with its refunds. Currency is locked after the first entry of any kind.
+
+`PATCH /api/categories/:id` accepts the current `version`, optional `name`, and optional boolean `archived`. Rename preserves references across history; archive excludes new selection, preserves existing entries, and can be reversed. Starter categories are seeded once, so renamed defaults do not reappear.

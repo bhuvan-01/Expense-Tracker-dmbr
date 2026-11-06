@@ -118,3 +118,8 @@ Do not announce success before the server confirms it. Do not claim Undo unless 
 Run repository-owned formatting, type checks, build, and meaningful calculation/access-isolation tests once the stack exists. Exercise complete create/edit/refund/delete journeys, save failures/retries, session expiry, conflicts, empty/no-results states, keyboard interaction, and a narrow viewport in a browser. Compare repeated operations across Overview and Transactions.
 
 Authentication test sources: `tests/auth.test.ts`, `tests/e2e/auth.spec.ts`, and `tests/design.test.ts`. Run the commands in README.md for current results. Financial workflow checks remain pending implementation; automated accessibility scans are not a claim of complete conformance.
+
+
+## Implemented money-entry rules
+
+Income uses positive exact minor units without an expense category. Refunds must reference an owned purchase, cannot predate it or cumulatively exceed it, and remain attached on edit. The server blocks deleting refunded purchases or changing their amount/date incompatibly. Expenses display gross totals; refunds reduce net spending in their own recorded period. Category rename updates historical labels; archive hides new selection while allowing edits to historical entries. Category modal has busy, error, success and dirty-exit states.

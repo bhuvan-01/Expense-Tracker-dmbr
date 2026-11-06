@@ -464,3 +464,192 @@ test("pagination clamps deleted pages; filters, literal search, sorting and filt
     400,
   );
 });
+
+test("income, linked partial refunds and archived categories retain private consistent history", async (t) => {
+  const f = await fixture(t),
+    workspace = await f.setup();
+  const category = workspace.categories[0];
+  const body = f.values(category.id, "25.00");
+  const original = (await (
+    await f.request("/expenses", "POST", body)
+  ).json()) as Expense;
+  const incomeBody = {
+    ...body,
+    amount: "1000.00",
+    merchant: "Salary",
+    categoryId: undefined,
+  };
+  const key = randomUUID();
+  let response = await f.request("/income", "POST", incomeBody, { key });
+  assert.equal(response.status, 201, await response.clone().text());
+  let income = (await response.json()) as Expense;
+  assert.equal(
+    (await f.request("/income", "POST", incomeBody, { key })).status,
+    200,
+  );
+  assert.equal(
+    (
+      await f.request(
+        "/income",
+        "POST",
+        { ...incomeBody, amount: "999" },
+        { key },
+      )
+    ).status,
+    409,
+  );
+  assert.equal(
+    (
+      await f.request(`/income/${income.id}`, "PATCH", {
+        ...incomeBody,
+        version: 1,
+        amount: "1100",
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (
+      await f.request(`/income/${income.id}`, "PATCH", {
+        ...incomeBody,
+        version: 1,
+      })
+    ).status,
+    409,
+  );
+  const otherCookie = await f.signup("cash-other@example.com");
+  await f.setup("GBP", otherCookie);
+  assert.equal(
+    (
+      await f.request(`/income/${income.id}`, "GET", undefined, {
+        cookie: otherCookie,
+      })
+    ).status,
+    404,
+  );
+  const refundBody = { ...body, expenseId: original.id, amount: "10.00" };
+  response = await f.request("/refunds", "POST", refundBody);
+  assert.equal(response.status, 201, await response.clone().text());
+  const refund = (await response.json()) as Expense;
+  assert.equal(
+    (await f.request("/refunds", "POST", { ...refundBody, amount: "15.01" }))
+      .status,
+    400,
+  );
+  assert.equal(
+    (await f.request("/refunds", "POST", { ...refundBody, date: "2026-10-27" }))
+      .status,
+    400,
+  );
+  assert.equal(
+    (await f.request("/refunds", "POST", refundBody, { cookie: otherCookie }))
+      .status,
+    404,
+  );
+  assert.equal(
+    (await f.request(`/expenses/${original.id}`, "DELETE", { version: 1 }))
+      .status,
+    409,
+  );
+  assert.equal(
+    (
+      await f.request(`/expenses/${original.id}`, "PATCH", {
+        ...body,
+        amount: "9",
+        version: 1,
+      })
+    ).status,
+    409,
+  );
+  assert.equal(
+    (
+      await f.request(`/expenses/${original.id}`, "PATCH", {
+        ...body,
+        date: "2026-10-29",
+        version: 1,
+      })
+    ).status,
+    409,
+  );
+  assert.equal(
+    (await (await f.request(`/expenses/${original.id}`)).json())
+      .refundableMinor,
+    1500,
+  );
+  response = await f.request(`/categories/${category.id}`, "PATCH", {
+    name: "Renamed category",
+    version: category.version,
+    archived: true,
+  });
+  assert.equal(response.status, 200, await response.clone().text());
+  const changed = await response.json();
+  assert.equal(
+    (
+      await f.request(`/categories/${category.id}`, "PATCH", {
+        name: "Stale",
+        version: category.version,
+      })
+    ).status,
+    409,
+  );
+  assert.equal(
+    (
+      await f.request(
+        `/categories/${category.id}`,
+        "PATCH",
+        { name: "Stolen", version: changed.version },
+        { cookie: otherCookie },
+      )
+    ).status,
+    404,
+  );
+  assert.equal((await f.request("/expenses", "POST", body)).status, 400);
+  assert.equal(
+    (
+      await f.request(`/expenses/${original.id}`, "PATCH", {
+        ...body,
+        amount: "30",
+        version: 1,
+      })
+    ).status,
+    200,
+  );
+  const refreshed = (await (await f.request("/workspace")).json()) as Workspace;
+  assert.equal(refreshed.categories.length, workspace.categories.length);
+  assert.equal(
+    refreshed.categories.find((item) => item.id === category.id)?.name,
+    "Renamed category",
+  );
+  const refunds = await (
+    await f.request("/refunds/search", "POST", { q: "Renamed category" })
+  ).json();
+  assert.equal(refunds.totalMinor, 1000);
+  assert.equal(refunds.total, 1);
+  assert.equal(
+    (
+      await f.request(`/refunds/${refund.id}`, "DELETE", {
+        version: refund.version,
+      })
+    ).status,
+    204,
+  );
+  assert.equal(
+    (await f.request(`/expenses/${original.id}`, "DELETE", { version: 2 }))
+      .status,
+    204,
+  );
+  income = (await (await f.request(`/income/${income.id}`)).json()) as Expense;
+  assert.equal(
+    (
+      await f.request(`/income/${income.id}`, "DELETE", {
+        version: income.version,
+      })
+    ).status,
+    204,
+  );
+  assert.equal(
+    (await f.request("/income", "POST", incomeBody, { key })).status,
+    409,
+  );
+  assert.equal((await f.setup()).preferences.currencyLocked, 1);
+});
