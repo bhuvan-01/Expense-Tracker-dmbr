@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=.env server/index.ts",
     "start": "tsx --env-file-if-exists=.env server/index.ts --production",
+    "db:backup": "tsx --env-file-if-exists=.env server/backup-cli.ts",
     "db:migrate": "tsx --env-file-if-exists=.env server/migrate.ts",
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && vite build",

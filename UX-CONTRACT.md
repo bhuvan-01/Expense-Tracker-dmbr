@@ -118,3 +118,26 @@ Do not announce success before the server confirms it. Do not claim Undo unless 
 Run repository-owned formatting, type checks, build, and meaningful calculation/access-isolation tests once the stack exists. Exercise complete create/edit/refund/delete journeys, save failures/retries, session expiry, conflicts, empty/no-results states, keyboard interaction, and a narrow viewport in a browser. Compare repeated operations across Overview and Transactions.
 
 Authentication test sources: `tests/auth.test.ts`, `tests/e2e/auth.spec.ts`, and `tests/design.test.ts`. Run the commands in README.md for current results. Financial workflow checks remain pending implementation; automated accessibility scans are not a claim of complete conformance.
+
+
+## Implemented money-entry rules
+
+Income uses positive exact minor units without an expense category. Refunds must reference an owned purchase, cannot predate it or cumulatively exceed it, and remain attached on edit. The server blocks deleting refunded purchases or changing their amount/date incompatibly. Expenses display gross totals; refunds reduce net spending in their own recorded period. Category rename updates historical labels; archive hides new selection while allowing edits to historical entries. Category modal has busy, error, success and dirty-exit states.
+
+
+## Monthly overview implementation
+
+`server/summary.ts` owns all dated-event totals. Month selection cancels superseded reads and clears old figures until the selected month loads. Previous-period comparison uses calendar months. Refunds are positive receipts that reduce net spending in their own month; the difference is recorded income minus net spending, never a bank balance. Empty months show zero totals with explicit guidance; failures offer retry. Category tables expose the exact values without relying on graphics.
+
+
+## Budget implementation
+
+Monthly overall/category caps are independent, use the same net-spending calculation as Overview, and never roll forward silently. Zero is a valid no-spending limit; null means unset. Server-owned versions detect stale changes and survive removal to avoid stale recreation. Identical one-version save retries are safe after a lost response. Saved budgets lock workspace currency. Dirty editor values remain in memory on errors; removal confirms its month/scope while preserving entries.
+
+
+## Reports and export implementation
+
+Reports reuse the overview calculation service and expose daily/month totals. CSV export uses exact money strings, positive entry amounts plus explicit signed net-spending effects, type and original-purchase linkage. Exports include all matching pages, at most 10,000 entries, with server-owned account isolation, origin/session checks, no-store responses and spreadsheet-formula escaping. History exports snapshot the current visible search/filter scope. Busy exports do not claim completion until a blob is received; status says download started, because browser disk persistence is outside the app. Monthly selectors are locked while exporting to avoid ambiguous scope.
+
+
+Payment-method filtering shares one server-validated scope across histories and CSV exports, using the native SelectField control. Home redirects are session-aware and never cached.

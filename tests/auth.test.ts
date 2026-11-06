@@ -277,3 +277,16 @@ test("signup validation checks confirmation; sign-in accepts existing passwords 
     {},
   );
 });
+
+test("the home URL returns signed-in users to their workspace without caching", async (t) => {
+  const f = await fixture(t);
+  const guest = await fetch(`${f.base}/`, { redirect: "manual" });
+  assert.equal(guest.headers.get("location"), "/sign-in");
+  const signup = await f.post("/sign-up/email", credentials);
+  const member = await fetch(`${f.base}/`, {
+    redirect: "manual",
+    headers: { Cookie: cookies(signup) },
+  });
+  assert.equal(member.headers.get("location"), "/app");
+  assert.match(member.headers.get("cache-control") || "", /no-store/);
+});

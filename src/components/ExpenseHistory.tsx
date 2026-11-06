@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  Undo2,
   ArrowDownUp,
   ChevronLeft,
   ChevronRight,
@@ -10,8 +11,10 @@ import {
   X,
   LoaderCircle,
 } from "lucide-react";
+import { downloadCsv } from "../lib/download";
 import { api, ApiError } from "../lib/api";
 import {
+  PAYMENT_METHODS,
   dateLabel,
   money,
   type Expense,
@@ -19,6 +22,7 @@ import {
   type ExpenseList,
   type Workspace,
 } from "../lib/ledger";
+import { entryLabels, entryPath, type EntryKind } from "../lib/entries";
 import { Field } from "./Field";
 import { SelectField } from "./SelectField";
 import { StatusMessage } from "./StatusMessage";
@@ -30,13 +34,21 @@ function readFilters(q = ""): ExpenseFilters {
     from: params.get("from") || "",
     to: params.get("to") || "",
     category: params.get("category") || "",
+    payment: params.get("payment") || "",
     sort: params.get("sort") || "date_desc",
     page: Math.max(1, Number(params.get("page")) || 1),
   };
 }
 function writeFilters(filters: ExpenseFilters, replace = false) {
   const params = new URLSearchParams();
-  for (const key of ["from", "to", "category", "sort", "page"] as const)
+  for (const key of [
+    "from",
+    "to",
+    "category",
+    "payment",
+    "sort",
+    "page",
+  ] as const)
     if (
       filters[key] &&
       !(key === "page" && filters.page === 1) &&
@@ -49,17 +61,41 @@ function writeFilters(filters: ExpenseFilters, replace = false) {
 }
 export function ExpenseHistory({
   workspace,
+  kind = "expense",
+  onRefund,
   revision,
   onAdd,
   onEdit,
   onDelete,
 }: {
   workspace: Workspace;
+  kind?: EntryKind;
+  onRefund?: (expense: Expense) => void;
   revision: number;
   onAdd: () => void;
   onEdit: (expense: Expense) => void;
   onDelete: (expense: Expense) => void;
 }) {
+  const [exporting, setExporting] = useState(false),
+    [exportError, setExportError] = useState(""),
+    [exportNotice, setExportNotice] = useState("");
+  async function exportView() {
+    if (exporting) return;
+    setExporting(true);
+    setExportError("");
+    setExportNotice("");
+    try {
+      await downloadCsv(kind, { ...filters, q: query });
+      setExportNotice(
+        "CSV download started. It contains all matching entries, across every page.",
+      );
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Unable to export.");
+    } finally {
+      setExporting(false);
+    }
+  }
+  const labels = entryLabels[kind];
   const [filters, setFilters] = useState<ExpenseFilters>(() => readFilters());
   const [query, setQuery] = useState(""),
     [composing, setComposing] = useState(false);
@@ -92,7 +128,7 @@ export function ExpenseHistory({
     setPending(true);
     setError("");
     setExpired(false);
-    void api<ExpenseList>("/expenses/search", {
+    void api<ExpenseList>(`${entryPath(kind)}/search`, {
       method: "POST",
       body: JSON.stringify(filters),
       signal: abort.signal,
@@ -120,7 +156,7 @@ export function ExpenseHistory({
         setPending(false);
       });
     return () => abort.abort();
-  }, [filters, revision, attempt]);
+  }, [filters, revision, attempt, kind]);
   const change = (key: keyof ExpenseFilters, value: string | number) => {
     const next = {
       ...filters,
@@ -132,7 +168,11 @@ export function ExpenseHistory({
     if (key === "page") focusPage.current = true;
   };
   const active = Boolean(
-    filters.q || filters.category || filters.from || filters.to,
+    filters.q ||
+    filters.category ||
+    filters.payment ||
+    filters.from ||
+    filters.to,
   );
   const clear = () => {
     setQuery("");
@@ -141,6 +181,7 @@ export function ExpenseHistory({
       from: "",
       to: "",
       category: "",
+      payment: "",
       sort: "date_desc",
       page: 1,
     };
@@ -153,19 +194,51 @@ export function ExpenseHistory({
       <div className="history-title-row">
         <div>
           <h2 id="history-title" ref={heading} tabIndex={-1}>
-            Your expense history
+            {kind === "expense"
+              ? "Your expense history"
+              : kind === "income"
+                ? "Your income history"
+                : "Your refunds"}
           </h2>
-          <p>Everyday spending, all in one place.</p>
+          <p>
+            {kind === "expense"
+              ? "Everyday spending, all in one place."
+              : kind === "income"
+                ? "Salary, freelance work, and other money received."
+                : "Refunds are linked to purchases and reduce spending on the refund date."}
+          </p>
         </div>
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={exporting || pending || !list?.total}
+          onClick={() => void exportView()}
+        >
+          {exporting ? "Preparing CSV…" : "Export this view"}
+        </button>
         {active && (
           <button type="button" className="text-button" onClick={clear}>
             Clear filters
           </button>
         )}
       </div>
+      {exportError && (
+        <StatusMessage error>
+          {exportError}{" "}
+          <button
+            className="text-button"
+            type="button"
+            disabled={exporting}
+            onClick={() => void exportView()}
+          >
+            Retry export
+          </button>
+        </StatusMessage>
+      )}
+      {exportNotice && <StatusMessage>{exportNotice}</StatusMessage>}
       <div className="ledger-filters">
         <div className="field history-search">
-          <label htmlFor="expense-search">Search expenses</label>
+          <label htmlFor="expense-search">Search {labels.plural}</label>
           <div className="search-control">
             <Search size={18} aria-hidden="true" />
             <input
@@ -199,16 +272,31 @@ export function ExpenseHistory({
             )}
           </div>
         </div>
+        {kind !== "income" && (
+          <SelectField
+            id="filter-category"
+            label="Category"
+            value={filters.category}
+            onChange={(event) => change("category", event.target.value)}
+          >
+            <option value="">All categories</option>
+            {workspace.categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </SelectField>
+        )}
         <SelectField
-          id="filter-category"
-          label="Category"
-          value={filters.category}
-          onChange={(event) => change("category", event.target.value)}
+          id="filter-payment"
+          label="Payment method"
+          value={filters.payment || ""}
+          onChange={(event) => change("payment", event.target.value)}
         >
-          <option value="">All categories</option>
-          {workspace.categories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
+          <option value="">All payment methods</option>
+          {PAYMENT_METHODS.map((method) => (
+            <option key={method} value={method}>
+              {method}
             </option>
           ))}
         </SelectField>
@@ -234,23 +322,23 @@ export function ExpenseHistory({
           {pending ? (
             <>
               <LoaderCircle className="spin" size={14} aria-hidden="true" />{" "}
-              Updating expenses…
+              Updating {labels.plural}…
             </>
           ) : list ? (
             <>
               <strong>{list.total}</strong>{" "}
-              {list.total === 1 ? "expense" : "expenses"}
+              {list.total === 1 ? labels.singular : labels.plural}
               {active ? " matching your filters" : " recorded"}
             </>
           ) : (
-            "Expenses"
+            labels.plural
           )}
         </p>
         <div className="sort-control">
           <ArrowDownUp size={15} aria-hidden="true" />
           <SelectField
             id="expense-sort"
-            label="Sort expenses"
+            label={`Sort ${labels.plural}`}
             value={filters.sort}
             onChange={(event) => change("sort", event.target.value)}
           >
@@ -286,7 +374,8 @@ export function ExpenseHistory({
           <>
             <div className="history-total">
               <span>
-                Total spent{active ? " in this view" : " across your expenses"}
+                {labels.total}
+                {active ? " in this view" : ` across your ${labels.plural}`}
               </span>
               <strong>
                 {money(list.totalMinor, workspace.preferences.currency!)}
@@ -300,7 +389,13 @@ export function ExpenseHistory({
                 </caption>
                 <thead>
                   <tr>
-                    <th scope="col">Expense</th>
+                    <th scope="col">
+                      {kind === "expense"
+                        ? "Expense"
+                        : kind === "income"
+                          ? "Income"
+                          : "Refund"}
+                    </th>
                     <th scope="col">Date</th>
                     <th scope="col">Category</th>
                     <th scope="col" className="numeric">
@@ -347,11 +442,26 @@ export function ExpenseHistory({
                         {money(expense.amountMinor, expense.currency)}
                       </td>
                       <td className="actions-cell">
+                        {kind === "expense" &&
+                          onRefund &&
+                          (expense.refundableMinor ?? expense.amountMinor) >
+                            0 && (
+                            <button
+                              type="button"
+                              className="icon-button"
+                              aria-label={`Record refund for ${expense.merchant || expense.categoryName}`}
+                              title="Record refund"
+                              disabled={pending}
+                              onClick={() => onRefund(expense)}
+                            >
+                              <Undo2 size={16} aria-hidden="true" />
+                            </button>
+                          )}
                         <button
                           type="button"
                           className="icon-button"
                           aria-label={`Edit ${expense.merchant || expense.categoryName}`}
-                          title="Edit expense"
+                          title={`Edit ${labels.singular}`}
                           disabled={pending}
                           onClick={() => onEdit(expense)}
                         >
@@ -361,7 +471,7 @@ export function ExpenseHistory({
                           type="button"
                           className="icon-button danger-icon"
                           aria-label={`Delete ${expense.merchant || expense.categoryName}`}
-                          title="Delete expense"
+                          title={`Delete ${labels.singular}`}
                           disabled={pending}
                           onClick={() => onDelete(expense)}
                         >
@@ -409,25 +519,35 @@ export function ExpenseHistory({
             </span>
             <h3>
               {active
-                ? "No matching expenses"
+                ? `No matching ${labels.plural}`
                 : "Small steps. A clearer picture."}
             </h3>
             <p>
               {active
                 ? "Try a different search or clear your filters."
-                : "Add your first expense. A coffee, a grocery shop, a trip home — start with today."}
+                : kind === "expense"
+                  ? "Add your first expense. A coffee, a grocery shop, a trip home — start with today."
+                  : kind === "income"
+                    ? "Record money you receive to see how it compares with your spending."
+                    : "Open Expenses and use Record refund beside the original purchase."}
             </p>
             <button
               type="button"
               className="primary-button"
               onClick={active ? clear : onAdd}
             >
-              {active ? "Clear filters" : "Add your first expense"}
+              {active
+                ? "Clear filters"
+                : kind === "expense"
+                  ? "Add your first expense"
+                  : kind === "income"
+                    ? "Add your first income"
+                    : "Go to expenses"}
             </button>
           </div>
         ) : !list && pending ? (
           <p className="loading-status history-loading">
-            Loading your expenses…
+            Loading your {labels.plural}…
           </p>
         ) : null}
       </div>

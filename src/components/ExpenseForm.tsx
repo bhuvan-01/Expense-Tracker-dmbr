@@ -14,6 +14,13 @@ import {
   type ExpenseValues,
   type Workspace,
 } from "../lib/ledger";
+import {
+  entryLabels,
+  entryPath,
+  type EntryKind,
+  type MoneyEntry,
+} from "../lib/entries";
+import { money } from "../lib/ledger";
 import { Field } from "./Field";
 import { SelectField } from "./SelectField";
 import { Dialog } from "./Dialog";
@@ -22,24 +29,29 @@ import { StatusMessage } from "./StatusMessage";
 
 export function ExpenseForm({
   expense,
+  kind = "expense",
+  refundOf,
   workspace,
   onClose,
   onSaved,
   onCategory,
 }: {
-  expense: Expense | null;
+  expense: MoneyEntry | null;
+  kind?: EntryKind;
+  refundOf?: Expense;
   workspace: Workspace;
   onClose: () => void;
   onSaved: () => void;
   onCategory: (category: Category) => void;
 }) {
+  const labels = entryLabels[kind];
   const currency = workspace.preferences.currency as Currency;
   const today = todayIn(workspace.preferences.timezone!);
   const initial: ExpenseValues = {
     amount: expense ? amountInput(expense.amountMinor, currency) : "",
     date: expense?.date || today,
-    categoryId: expense?.categoryId || "",
-    merchant: expense?.merchant || "",
+    categoryId: expense?.categoryId || refundOf?.categoryId || "",
+    merchant: expense?.merchant || refundOf?.merchant || "",
     paymentMethod: expense?.paymentMethod || "Not specified",
     note: expense?.note || "",
   };
@@ -81,7 +93,7 @@ export function ExpenseForm({
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (saving.current || categoryPending) return;
-    const issues = validateExpense(values, currency, today);
+    const issues = validateExpense(values, currency, today, kind === "expense");
     setErrors(issues);
     setError("");
     const first = Object.keys(issues)[0];
@@ -89,7 +101,12 @@ export function ExpenseForm({
       document.getElementById(`expense-${first}`)?.focus();
       return;
     }
-    const body = { ...values, currency, version: expense?.version };
+    const body = {
+      ...values,
+      currency,
+      version: expense?.version,
+      expenseId: expense?.expenseId || refundOf?.id,
+    };
     const snapshot = JSON.stringify(body);
     if (request.current.snapshot && request.current.snapshot !== snapshot)
       request.current.id = crypto.randomUUID();
@@ -97,11 +114,14 @@ export function ExpenseForm({
     saving.current = true;
     setPending(true);
     try {
-      await api<Expense>(expense ? `/expenses/${expense.id}` : "/expenses", {
-        method: expense ? "PATCH" : "POST",
-        headers: { "Idempotency-Key": request.current.id },
-        body: snapshot,
-      });
+      await api<Expense>(
+        expense ? `${entryPath(kind)}/${expense.id}` : entryPath(kind),
+        {
+          method: expense ? "PATCH" : "POST",
+          headers: { "Idempotency-Key": request.current.id },
+          body: snapshot,
+        },
+      );
       onSaved();
     } catch (err) {
       if (err instanceof ApiError) {
@@ -157,13 +177,13 @@ export function ExpenseForm({
           <div>
             <p className="form-step">YOUR EVERYDAY LEDGER</p>
             <h2 id="expense-form-title">
-              {expense ? "Edit expense" : "Add expense"}
+              {expense ? `Edit ${labels.singular}` : labels.create}
             </h2>
           </div>
           <button
             type="button"
             className="icon-button"
-            aria-label="Close expense form"
+            aria-label={`Close ${labels.singular} form`}
             onClick={close}
             disabled={pending || categoryPending}
           >
@@ -198,9 +218,21 @@ export function ExpenseForm({
                 </StatusMessage>
               </div>
             )}
+            {refundOf && (
+              <p className="refund-context">
+                Refund for{" "}
+                <strong>{refundOf.merchant || refundOf.categoryName}</strong>.
+                Available to refund:{" "}
+                {money(
+                  refundOf.refundableMinor ?? refundOf.amountMinor,
+                  currency,
+                )}
+                . Recorded on the refund date.
+              </p>
+            )}
             <fieldset
               className="expense-fields"
-              aria-label="Expense details"
+              aria-label={`${labels.singular} details`}
               disabled={pending || unknownSave}
             >
               <div className="amount-field">
@@ -226,22 +258,32 @@ export function ExpenseForm({
                 />
               </div>
               <div className="form-grid">
-                <SelectField
-                  id="expense-categoryId"
-                  label="Category"
-                  value={values.categoryId}
-                  onChange={(event) => update("categoryId", event.target.value)}
-                  error={errors.categoryId}
-                  required
-                  disabled={pending || categoryPending}
-                >
-                  <option value="">Choose a category</option>
-                  {workspace.categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </SelectField>
+                {kind === "expense" && (
+                  <SelectField
+                    id="expense-categoryId"
+                    label="Category"
+                    value={values.categoryId}
+                    onChange={(event) =>
+                      update("categoryId", event.target.value)
+                    }
+                    error={errors.categoryId}
+                    required
+                    disabled={pending || categoryPending}
+                  >
+                    <option value="">Choose a category</option>
+                    {workspace.categories
+                      .filter(
+                        (category) =>
+                          !category.archived ||
+                          category.id === values.categoryId,
+                      )
+                      .map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
+                  </SelectField>
+                )}
                 <Field
                   id="expense-date"
                   label="Date"
@@ -255,43 +297,49 @@ export function ExpenseForm({
                   required
                 />
               </div>
-              <details className="category-disclosure">
-                <summary>Add a new category</summary>
-                <div className="new-category-row">
-                  <Field
-                    id="new-category"
-                    label="New category name"
-                    value={categoryName}
-                    onChange={(event) => {
-                      setCategoryName(event.target.value);
-                      setCategoryError("");
-                    }}
-                    error={categoryError}
-                    maxLength={50}
-                    disabled={pending || categoryPending}
-                  />
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={addCategory}
-                    disabled={pending || categoryPending}
-                  >
-                    {categoryPending ? (
-                      <LoaderCircle
-                        className="spin"
-                        size={16}
-                        aria-hidden="true"
-                      />
-                    ) : (
-                      <Plus size={16} aria-hidden="true" />
-                    )}{" "}
-                    Add category
-                  </button>
-                </div>
-              </details>
+              {kind === "expense" && (
+                <details className="category-disclosure">
+                  <summary>Add a new category</summary>
+                  <div className="new-category-row">
+                    <Field
+                      id="new-category"
+                      label="New category name"
+                      value={categoryName}
+                      onChange={(event) => {
+                        setCategoryName(event.target.value);
+                        setCategoryError("");
+                      }}
+                      error={categoryError}
+                      maxLength={50}
+                      disabled={pending || categoryPending}
+                    />
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={addCategory}
+                      disabled={pending || categoryPending}
+                    >
+                      {categoryPending ? (
+                        <LoaderCircle
+                          className="spin"
+                          size={16}
+                          aria-hidden="true"
+                        />
+                      ) : (
+                        <Plus size={16} aria-hidden="true" />
+                      )}{" "}
+                      Add category
+                    </button>
+                  </div>
+                </details>
+              )}
               <Field
                 id="expense-merchant"
-                label="Merchant or description (optional)"
+                label={
+                  kind === "income"
+                    ? "Source or description (optional)"
+                    : "Merchant or description (optional)"
+                }
                 type="text"
                 placeholder="e.g. Weekly grocery shop"
                 value={values.merchant}
@@ -356,7 +404,7 @@ export function ExpenseForm({
               {pending && (
                 <LoaderCircle className="spin" size={17} aria-hidden="true" />
               )}
-              {pending ? "Saving…" : expense ? "Save changes" : "Save expense"}
+              {pending ? "Saving…" : expense ? "Save changes" : labels.save}
             </button>
           </footer>
         </form>

@@ -2,18 +2,22 @@ import { useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { money, type Expense } from "../lib/ledger";
+import { entryLabels, entryPath, type EntryKind } from "../lib/entries";
 import { Dialog } from "./Dialog";
 import { StatusMessage } from "./StatusMessage";
 
 export function DeleteExpenseDialog({
   expense,
+  kind = "expense",
   onClose,
   onDeleted,
 }: {
   expense: Expense;
+  kind?: EntryKind;
   onClose: () => void;
   onDeleted: () => void;
 }) {
+  const label = entryLabels[kind].singular;
   const [pending, setPending] = useState(false),
     [error, setError] = useState("");
   async function remove() {
@@ -21,7 +25,7 @@ export function DeleteExpenseDialog({
     setPending(true);
     setError("");
     try {
-      await api(`/expenses/${expense.id}`, {
+      await api(`${entryPath(kind)}/${expense.id}`, {
         method: "DELETE",
         body: JSON.stringify({ version: expense.version }),
       });
@@ -48,7 +52,7 @@ export function DeleteExpenseDialog({
         if (!pending) onClose();
       }}
     >
-      <h2 id="delete-title">Delete this expense?</h2>
+      <h2 id="delete-title">Delete this {label}?</h2>
       <p id="delete-description">
         <strong>{expense.merchant || expense.categoryName}</strong> ·{" "}
         {money(expense.amountMinor, expense.currency)} will be permanently
@@ -63,7 +67,7 @@ export function DeleteExpenseDialog({
           onClick={onClose}
           disabled={pending}
         >
-          Keep expense
+          Keep {label}
         </button>
         <button
           type="button"
@@ -74,7 +78,7 @@ export function DeleteExpenseDialog({
           {pending && (
             <LoaderCircle className="spin" size={16} aria-hidden="true" />
           )}
-          {pending ? "Deleting…" : "Delete expense"}
+          {pending ? "Deleting…" : `Delete ${label}`}
         </button>
       </div>
     </Dialog>

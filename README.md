@@ -1,6 +1,6 @@
 # Expense Tracker
 
-A personal expense tracker, built feature by feature. Signup/sign-in and the first expense-ledger milestone are implemented: record, review, edit, filter and delete your own expenses.
+A personal expense tracker with private accounts, expense/income/refund entry, category management, monthly overview, budgets, daily reports, CSV exports and verified database backups. The core is ready for personal use; public-launch email/privacy/deployment requirements remain open.
 
 ## Run locally
 
@@ -24,6 +24,10 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'
 Put the generated value in `BETTER_AUTH_SECRET`. `BETTER_AUTH_URL` must match the origin used in the browser, including the port. Set `PORT` consistently when changing it. Changing the secret can invalidate existing sessions.
 
 ## Implemented
+
+- Income and linked partial refunds, category rename/archive/restore, monthly overview and prior-month comparison.
+- Monthly overall/category budgets with zero/unset limits, exact remaining/over amounts and conflict protection.
+- Daily monthly reports, filtered/monthly CSV export across pages, and online database backup/recovery guidance.
 
 - Responsive signup and sign-in screens, shared accessible fields, local fonts, and password visibility controls.
 - Name/email/password validation, 12–128 character signup passwords, and confirmation matching.
@@ -66,7 +70,7 @@ All endpoints require a valid session. Mutations/search require `Content-Type: a
 | Endpoint | Behavior |
 |---|---|
 | `GET /api/workspace` | Current preferences and private categories |
-| `PUT /api/workspace` | Confirm currency/timezone; currency changes rejected after the first expense |
+| `PUT /api/workspace` | Confirm currency/timezone; currency changes rejected after the first entry or saved budget |
 | `POST /api/categories` | Create or reuse a category name in this workspace |
 | `GET /api/expenses` | Paginated list with safe date/category/sort/page parameters |
 | `POST /api/expenses/search` | Same list with private search text in a JSON body |
@@ -109,3 +113,22 @@ Authentication behavior is delegated to [Better Auth](https://better-auth.com/do
 Stack: React, TypeScript, Vite, Express, Better Auth, and better-sqlite3. The browser never stores credentials/session tokens or expense drafts in localStorage. Better Auth owns authentication security; the ledger router separately requires a verified session and exact origin/JSON checks for mutations. Do not replace these checks with a browser-only login flag.
 
 Completed feature milestones are committed and pushed to the GitHub repository on a `codex/` branch, with review links and validation evidence. Do not push credentials, account databases, screenshots containing user data, or failing work as completed.
+
+
+## Income, refunds and categories
+
+Income and refunds have the same create, get, search, edit and versioned delete APIs as expenses under `/api/income` and `/api/refunds`. Income has no expense category. Refund bodies include `expenseId` for an owned purchase; cumulative refunds cannot exceed that purchase or predate it. Refunded purchases cannot be deleted until refunds are removed. Changing a purchase amount/date must remain consistent with its refunds. Currency is locked after the first entry of any kind.
+
+`PATCH /api/categories/:id` accepts the current `version`, optional `name`, and optional boolean `archived`. Rename preserves references across history; archive excludes new selection, preserves existing entries, and can be reversed. Starter categories are seeded once, so renamed defaults do not reappear.
+
+
+`GET /api/summary?month=YYYY-MM` returns owner-scoped totals, previous-month totals, category spending and dated event totals. Refunds affect the month of their recorded date; the income-minus-spending figure is not an account balance. Supported report months are January 1900 through December 2199.
+
+
+`GET /api/budgets?month=YYYY-MM` returns the shared monthly summary and each category/overall cap with its current version. `PUT /api/budgets` accepts `month`, `scope` (empty for overall, category ID otherwise), confirmed `currency`, decimal-string `amount` (zero allowed; null removes a limit), and numeric `version` (zero for new). Overall/category limits are independent and apply only to the selected month. Saved budgets lock currency. Removed limits retain version history to prevent stale recreation.
+
+
+`POST /api/export` accepts `kind` (`all`, `expense`, `income`, `refund`) and optional `filters` using history date/category/search/sort parameters. CSV includes all matching pages (maximum 10,000 entries); narrow dates when larger. It includes record type, original purchase ID, positive amount, signed net-spending effect and income received. User-controlled text is escaped against spreadsheet formulas; export is intended for review, not lossless reimport. CSV contains personal financial data: store downloaded copies privately. The Reports screen exports all entry types for the chosen month.
+
+
+See [Personal-use guide and backup/recovery](PERSONAL_USE.md). Run `npm run db:backup` to create a new integrity-checked online SQLite snapshot in the ignored `.data/backups/` directory. Keep the authentication secret separately and store backup copies privately off-device.

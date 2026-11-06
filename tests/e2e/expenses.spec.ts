@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
@@ -68,6 +69,9 @@ test("desktop setup, expense CRUD, category creation, search, filters and totals
   await page.getByRole("button", { name: "Save expense", exact: true }).click();
   await expect(page.getByLabel("Amount (GBP)", { exact: true })).toBeFocused();
   await fillExpense(page, "Corner market");
+  await page
+    .getByLabel("Payment method (optional)", { exact: true })
+    .selectOption("Card");
   await page.getByLabel("Note (optional)").fill("Keep this search private");
   await a11y(page);
   await page.getByRole("button", { name: "Save expense", exact: true }).click();
@@ -104,6 +108,9 @@ test("desktop setup, expense CRUD, category creation, search, filters and totals
   ).not.toHaveValue("");
   await page.getByRole("button", { name: "Save expense", exact: true }).click();
   await expect(page.locator(".history-total")).toContainText("£20.00");
+  await page.getByLabel("Payment method", { exact: true }).selectOption("Card");
+  await expect(page.locator(".history-total")).toContainText("£15.50");
+  await page.getByLabel("Payment method", { exact: true }).selectOption("");
   await page.getByLabel("Search expenses").fill("search private");
   await expect(
     page.getByRole("row").filter({ hasText: "Pet shop" }),
@@ -152,6 +159,147 @@ test("desktop setup, expense CRUD, category creation, search, filters and totals
     page.getByRole("row").filter({ hasText: "Pet shop" }),
   ).not.toBeVisible();
   await expect(page.locator(".history-total")).toContainText("£15.50");
+  await page
+    .getByRole("button", { name: "Record refund for Corner market" })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "Record refund", exact: true }),
+  ).toBeVisible();
+  await page.getByLabel("Amount (GBP)", { exact: true }).fill("5.50");
+  await page.getByRole("button", { name: "Save refund", exact: true }).click();
+  await page.getByRole("button", { name: "Refunds", exact: true }).click();
+  await expect(page.locator(".history-total")).toContainText("£5.50");
+  await a11y(page);
+  await page.getByRole("button", { name: "Income", exact: true }).click();
+  await page.getByRole("button", { name: "Add income", exact: true }).click();
+  await page.getByLabel("Amount (GBP)", { exact: true }).fill("2000");
+  await page
+    .getByLabel("Source or description (optional)")
+    .fill("Monthly salary");
+  await page.getByRole("button", { name: "Save income", exact: true }).click();
+  await expect(page.locator(".history-total")).toContainText("£2,000.00");
+  await page
+    .getByRole("button", { name: "Manage categories", exact: true })
+    .click();
+  await page.getByLabel("Choose category").selectOption({ label: "Groceries" });
+  await page.getByLabel("Category name", { exact: true }).fill("Food shopping");
+  await page.getByRole("button", { name: "Save name", exact: true }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Category renamed" }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Archive category", exact: true })
+    .click();
+  await page
+    .getByRole("dialog", { name: "Archive Food shopping?" })
+    .getByRole("button", { name: "Archive category", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Restore category", exact: true }),
+  ).toBeVisible();
+  await a11y(page);
+  await page
+    .getByRole("button", { name: "Close categories", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Expenses", exact: true }).click();
+  await expect(
+    page.getByRole("row").filter({ hasText: "Corner market" }),
+  ).toContainText("Food shopping");
+  await page.getByRole("button", { name: "Overview", exact: true }).click();
+  await page.getByLabel("Overview month", { exact: true }).fill("2026-11");
+  await expect(page.locator(".monthly-difference")).toContainText("£2,005.50");
+  await expect(page.locator(".summary-grid")).toContainText("-£5.50");
+  await page.getByLabel("Overview month", { exact: true }).fill("2026-10");
+  await expect(page.locator(".summary-grid")).toContainText("£15.50");
+  await a11y(page);
+  await page.screenshot({
+    path: ".data/monthly-overview-desktop.png",
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 360, height: 780 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await a11y(page);
+  await page.screenshot({
+    path: ".data/monthly-overview-phone.png",
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "Budgets", exact: true }).click();
+  await page.getByLabel("Budget month", { exact: true }).fill("2026-10");
+  await page
+    .getByRole("button", { name: "Set overall budget", exact: true })
+    .click();
+  await page.getByLabel("Budget amount (GBP)").fill("10");
+  await page.getByRole("button", { name: "Save budget", exact: true }).click();
+  await expect(
+    page.getByRole("article", { name: "Overall budget", exact: true }),
+  ).toContainText("£5.50 over budget");
+  await expect(
+    page.getByRole("heading", { name: "Monthly budgets", exact: true }),
+  ).toBeFocused();
+  await page
+    .getByRole("button", { name: "Set Food shopping budget", exact: true })
+    .click();
+  await page.getByLabel("Budget amount (GBP)").fill("20");
+  await page.getByRole("button", { name: "Save budget", exact: true }).click();
+  await expect(
+    page.getByRole("article", { name: "Food shopping", exact: true }),
+  ).toContainText("£4.50 remaining");
+  await a11y(page);
+  await page.screenshot({ path: ".data/budgets-phone.png", fullPage: true });
+  await page
+    .getByRole("button", { name: "Edit overall budget", exact: true })
+    .click();
+  await page.getByLabel("Budget amount (GBP)").fill("0");
+  await page.getByRole("button", { name: "Save budget", exact: true }).click();
+  await expect(
+    page.getByRole("article", { name: "Overall budget", exact: true }),
+  ).toContainText("£15.50 over budget");
+  await page
+    .getByRole("button", { name: "Edit overall budget", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Remove budget limit", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Remove limit", exact: true }).click();
+  await expect(
+    page.getByRole("article", { name: "Overall budget", exact: true }),
+  ).toContainText("No limit set");
+  await page.getByRole("button", { name: "Reports", exact: true }).click();
+  await page.getByLabel("Report month", { exact: true }).fill("2026-11");
+  await expect(page.locator(".report-table tfoot")).toContainText("£2,005.50");
+  await a11y(page);
+  const downloadEvent = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Download monthly CSV", exact: true })
+    .click();
+  const download = await downloadEvent;
+  await download.saveAs(".data/month-report-test.csv");
+  const csv = await readFile(".data/month-report-test.csv", "utf8");
+  expect(csv).toContain('"income"');
+  expect(csv).toContain('"refund"');
+  expect(csv).toContain("Monthly salary");
+  expect(csv).not.toContain('"expense"');
+  await expect(
+    page.getByRole("status").filter({ hasText: "CSV download started" }),
+  ).toBeVisible();
+  await page.screenshot({ path: ".data/reports-phone.png", fullPage: true });
+  await page.getByRole("button", { name: "Expenses", exact: true }).click();
+  await page.getByLabel("Search expenses").fill("Corner market");
+  await expect(page.locator(".result-count")).toContainText(
+    "1 expense matching",
+  );
+  const filteredEvent = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Export this view", exact: true })
+    .click();
+  await (await filteredEvent).saveAs(".data/history-export-test.csv");
+  expect(await readFile(".data/history-export-test.csv", "utf8")).toContain(
+    "Corner market",
+  );
 });
 
 test("phone forms preserve input and retry a lost successful save without duplicates", async ({

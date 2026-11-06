@@ -29,7 +29,12 @@ export const STARTER_CATEGORIES = [
   "Other",
 ];
 export const MAX_MINOR = 999_999_999;
-export type Category = { id: string; name: string };
+export type Category = {
+  id: string;
+  name: string;
+  archived?: number;
+  version?: number;
+};
 export type Preferences = {
   currency: Currency | null;
   timezone: string | null;
@@ -41,6 +46,7 @@ export type Workspace = {
   today: string;
 };
 export type Expense = {
+  refundableMinor?: number;
   id: string;
   amountMinor: number;
   currency: Currency;
@@ -62,6 +68,7 @@ export type ExpenseValues = {
 };
 export type ExpenseErrors = Partial<Record<keyof ExpenseValues, string>>;
 export type ExpenseFilters = {
+  payment?: string;
   q: string;
   from: string;
   to: string;
@@ -140,13 +147,15 @@ export function validateExpense(
   values: ExpenseValues,
   currency: Currency,
   today: string,
+  requireCategory = true,
 ): ExpenseErrors {
   const errors: ExpenseErrors = {};
   if (parseAmount(values.amount, currency) === null)
     errors.amount = `Enter a positive amount with up to ${CURRENCIES[currency].digits} decimal places (maximum ${money(MAX_MINOR, currency)}).`;
   if (!validDate(values.date) || values.date > today)
     errors.date = "Choose a valid date from 1900 through today.";
-  if (!values.categoryId) errors.categoryId = "Choose a category.";
+  if (requireCategory && !values.categoryId)
+    errors.categoryId = "Choose a category.";
   if (values.merchant.trim().length > 120)
     errors.merchant = "Use 120 characters or fewer.";
   if (

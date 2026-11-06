@@ -1,7 +1,7 @@
 # Expense Tracker — Website Plan
 
-Status: proposed product and design plan; no application has been built.
-Prepared: 28 October 2026.
+Status: personal-use core implemented as of 6 November 2026; public-launch account/privacy requirements remain open.
+Prepared: 28 October 2026. Updated: 6 November 2026.
 
 ## 1. Product goal and assumptions
 

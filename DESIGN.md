@@ -46,7 +46,7 @@ components:
 
 ## Overview
 
-Design direction seeded on 28 October 2026; authentication screens implemented on 4 November 2026; expense ledger implemented on 5 November 2026. Income, budget, and reporting screens remain planned. User preferences may revise the proposal.
+Design direction seeded on 28 October 2026; authentication screens implemented on 4 November 2026; expense ledger implemented on 5 November 2026. Income, refund, overview, budget and reporting screens implemented on 6 November 2026. User preferences may revise the proposal.
 
 The reference is the useful order of a personal ledger: aligned figures, clear dates, concise categories, and enough space to correct an entry comfortably. The audience is an individual recording daily spending on a phone and reviewing a month on a larger screen. This is a product interface; the public launch page uses the same identity with lower information density.
 
@@ -122,3 +122,26 @@ Controls use 8px radii, content surfaces 12px. Avoid making every number a separ
 - Do not encode expense/refund/income distinctions using color alone.
 - Do not spread one entry form across several unnecessary steps.
 - Keep destructive data controls separate from ordinary preferences.
+
+
+### Income, refunds and category maintenance
+
+Shared entry forms, histories and delete dialogs own expense, income and refund flows. Text labels distinguish the entry kinds. A wrapping navigation row provides working destinations; Manage categories opens a native modal with versioned rename/archive/restore controls. Archived labels remain in history and filters. Refund forms name the original purchase and remaining refundable amount. Existing CSS tokens own all styling; platform date/select popups remain native.
+
+
+### Monthly overview
+
+`MonthlyOverview.tsx` owns a four-column definition list, a distinct income-minus-spending panel and an equivalent category table. It uses the shared semantic theme, native month input, and two-column metric reflow on phones. Category tables scroll inside their own container. No bank-balance claim or fabricated budget appears.
+
+
+### Budgets
+
+`Budgets.tsx` uses a single overall budget ruler followed by category rows. Progress is bounded from zero to 100% with exact remaining/over text. Zero caps remain distinct from absent limits. Each month and scope can be set, edited or removed in a native dialog, using shared inputs, dirty guards and confirmation. Archived categories with budgets or spending remain visible.
+
+
+### Reports and data downloads
+
+`Reports.tsx` owns native month selection, a daily report table with exact monthly totals and a CSV download action. `ExpenseHistory.tsx` exports every matching row across pages. Table regions are named/focusable for horizontal keyboard scrolling, with visible instructions. Export progress/errors/success use the shared status language. Budgets initially show overall, configured and used categories; Show all categories reveals remaining choices.
+
+
+Payment method uses the shared native select and filter layout, with full-width phone category/payment controls. All additions preserve runtime theme ownership.

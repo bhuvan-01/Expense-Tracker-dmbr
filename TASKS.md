@@ -6,10 +6,10 @@ Complete and verify one milestone before starting the next. Commit and push each
 |---|---|---|
 | 1 | Signup, sign-in, sessions, protected workspace, sign-out | Complete — delivered on `codex/signup-signin` |
 | 2 | Expense entry/history, edit/delete, starter/custom categories, filters and ownership checks | Complete — delivered on `codex/expense-entry` |
-| 3 | Income, refunds and category rename/archive | Next |
-| 4 | Monthly overview using one shared calculation service | Planned |
-| 5 | Overall and category budgets | Planned |
-| 6 | Reports and CSV export | Planned |
+| 3 | Income, refunds and category rename/archive | Complete |
+| 4 | Monthly overview using one shared calculation service | Complete |
+| 5 | Overall and category budgets | Complete |
+| 6 | Reports and CSV export | Complete |
 | 7 | Email verification/recovery, production privacy/data controls, launch checks | Required before public launch |
 
 ## Milestone 1 decisions — 4 November 2026
@@ -35,3 +35,38 @@ Verification on 4 November 2026: production build/typecheck, 12 backend/design t
 - Income/refunds, category archive/rename, budgets, reports/export and the public-launch privacy/email requirements remain future milestones.
 
 Verification on 5 November 2026: 22 backend/domain/design tests and 8 Chrome browser tests passed, including private-record isolation, exact totals, lost-save-response retries, stale mutations, cross-tab currency changes, desktop/mobile accessibility scans, settings, and modal focus recovery. Production build/typecheck, formatting, and strict UI audit passed. Desktop ledger and phone entry/history captures were visually inspected. Financial records, credentials, and generated captures remain excluded from Git. Full accessibility conformance and public production deployment are not claimed.
+
+
+## Milestone 3 — 6 November 2026
+
+Income CRUD, linked partial refunds, immutable refund ownership/linkage, category rename/archive/restore, and migration-safe starter category seeding implemented. Existing auth and expense workflows retained. Work lives in an isolated checkout to preserve the separate uncommitted bill-support prototype.
+
+Verification: 23 backend/domain/design tests, 8 Chrome browser journeys, production build/typecheck, formatting and strict UI contract audit. Income/refund/category flows are included in the desktop journey; previous private-data, retry, conflict and mobile coverage remains.
+
+
+## Milestone 4 — 6 November 2026
+
+Owner-scoped monthly overview uses one shared dated-event calculation service. Exact income, expenses, refunds, net spending and income minus net spending agree with category/day breakdowns. Includes previous-month comparison, native month selection and empty/loading/error/retry states. Refunds of older purchases affect the refund month.
+
+
+## Milestone 5 — 6 November 2026
+
+Monthly overall/category budgets with exact shared spending totals, zero limits, bounded accessible progress, remaining/over text, versioned edit/removal, loss-safe identical retries and currency consistency. Archive preserves referenced budgets.
+
+
+## Milestone 6 — 6 November 2026
+
+Monthly daily reports and CSV downloads for a month or filtered expense/income/refund history. Exact signed spending/income columns, cross-page export, linked purchase IDs, private scopes, formula escaping and download recovery. Phone tables have keyboard-scroll regions and visible hints.
+
+
+## Personal-use readiness — 6 November 2026
+
+Added an integrity-checked online SQLite backup command, recovery guide and authenticated home redirect. Core milestones 1–6 are implemented. Public-launch email verification/recovery, profile/privacy/deletion lifecycle and hosted deployment remain open; personal-use readiness is not a public-launch claim. See PERSONAL_USE.md.
+
+Personal-use polish also includes native payment-method filters across all histories and CSV, plus backend consistency coverage.
+
+Final local validation: 29 backend/domain/design tests and all 8 Chrome journeys passed (the payment-filter journey was rerun after its import fix); build/typecheck, formatting and strict UI audit passed. Monthly overview, budget and report phone captures were inspected. Existing local database backup passed integrity checks; separate bill-support working changes were preserved.
+
+CI caught a transient navigation contrast issue during a background fade. Navigation now switches text/background together without fading, preserving contrast throughout the state change. The existing browser accessibility journey verifies the final behavior.
+
+Budget editor save/cancel restores focus to the persistent budget heading when a refresh removes the original row action. The desktop/phone journey asserts this recovery.

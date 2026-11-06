@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import Database from "better-sqlite3";
+import { backupDatabase } from "../server/backup.js";
 import { test, type TestContext } from "node:test";
 import { randomBytes, randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -463,4 +465,579 @@ test("pagination clamps deleted pages; filters, literal search, sorting and filt
     (await f.request("/expenses?from=2026-11-01&to=2026-10-01")).status,
     400,
   );
+});
+
+test("income, linked partial refunds and archived categories retain private consistent history", async (t) => {
+  const f = await fixture(t),
+    workspace = await f.setup();
+  const category = workspace.categories[0];
+  const body = f.values(category.id, "25.00");
+  const original = (await (
+    await f.request("/expenses", "POST", body)
+  ).json()) as Expense;
+  const incomeBody = {
+    ...body,
+    amount: "1000.00",
+    merchant: "Salary",
+    categoryId: undefined,
+  };
+  const key = randomUUID();
+  let response = await f.request("/income", "POST", incomeBody, { key });
+  assert.equal(response.status, 201, await response.clone().text());
+  let income = (await response.json()) as Expense;
+  assert.equal(
+    (await f.request("/income", "POST", incomeBody, { key })).status,
+    200,
+  );
+  assert.equal(
+    (
+      await f.request(
+        "/income",
+        "POST",
+        { ...incomeBody, amount: "999" },
+        { key },
+      )
+    ).status,
+    409,
+  );
+  assert.equal(
+    (
+      await f.request(`/income/${income.id}`, "PATCH", {
+        ...incomeBody,
+        version: 1,
+        amount: "1100",
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (
+      await f.request(`/income/${income.id}`, "PATCH", {
+        ...incomeBody,
+        version: 1,
+      })
+    ).status,
+    409,
+  );
+  const otherCookie = await f.signup("cash-other@example.com");
+  await f.setup("GBP", otherCookie);
+  assert.equal(
+    (
+      await f.request(`/income/${income.id}`, "GET", undefined, {
+        cookie: otherCookie,
+      })
+    ).status,
+    404,
+  );
+  const refundBody = { ...body, expenseId: original.id, amount: "10.00" };
+  response = await f.request("/refunds", "POST", refundBody);
+  assert.equal(response.status, 201, await response.clone().text());
+  const refund = (await response.json()) as Expense;
+  assert.equal(
+    (await f.request("/refunds", "POST", { ...refundBody, amount: "15.01" }))
+      .status,
+    400,
+  );
+  assert.equal(
+    (await f.request("/refunds", "POST", { ...refundBody, date: "2026-10-27" }))
+      .status,
+    400,
+  );
+  assert.equal(
+    (await f.request("/refunds", "POST", refundBody, { cookie: otherCookie }))
+      .status,
+    404,
+  );
+  assert.equal(
+    (await f.request(`/expenses/${original.id}`, "DELETE", { version: 1 }))
+      .status,
+    409,
+  );
+  assert.equal(
+    (
+      await f.request(`/expenses/${original.id}`, "PATCH", {
+        ...body,
+        amount: "9",
+        version: 1,
+      })
+    ).status,
+    409,
+  );
+  assert.equal(
+    (
+      await f.request(`/expenses/${original.id}`, "PATCH", {
+        ...body,
+        date: "2026-10-29",
+        version: 1,
+      })
+    ).status,
+    409,
+  );
+  assert.equal(
+    (await (await f.request(`/expenses/${original.id}`)).json())
+      .refundableMinor,
+    1500,
+  );
+  response = await f.request(`/categories/${category.id}`, "PATCH", {
+    name: "Renamed category",
+    version: category.version,
+    archived: true,
+  });
+  assert.equal(response.status, 200, await response.clone().text());
+  const changed = await response.json();
+  assert.equal(
+    (
+      await f.request(`/categories/${category.id}`, "PATCH", {
+        name: "Stale",
+        version: category.version,
+      })
+    ).status,
+    409,
+  );
+  assert.equal(
+    (
+      await f.request(
+        `/categories/${category.id}`,
+        "PATCH",
+        { name: "Stolen", version: changed.version },
+        { cookie: otherCookie },
+      )
+    ).status,
+    404,
+  );
+  assert.equal((await f.request("/expenses", "POST", body)).status, 400);
+  assert.equal(
+    (
+      await f.request(`/expenses/${original.id}`, "PATCH", {
+        ...body,
+        amount: "30",
+        version: 1,
+      })
+    ).status,
+    200,
+  );
+  const refreshed = (await (await f.request("/workspace")).json()) as Workspace;
+  assert.equal(refreshed.categories.length, workspace.categories.length);
+  assert.equal(
+    refreshed.categories.find((item) => item.id === category.id)?.name,
+    "Renamed category",
+  );
+  const refunds = await (
+    await f.request("/refunds/search", "POST", { q: "Renamed category" })
+  ).json();
+  assert.equal(refunds.totalMinor, 1000);
+  assert.equal(refunds.total, 1);
+  assert.equal(
+    (
+      await f.request(`/refunds/${refund.id}`, "DELETE", {
+        version: refund.version,
+      })
+    ).status,
+    204,
+  );
+  assert.equal(
+    (await f.request(`/expenses/${original.id}`, "DELETE", { version: 2 }))
+      .status,
+    204,
+  );
+  income = (await (await f.request(`/income/${income.id}`)).json()) as Expense;
+  assert.equal(
+    (
+      await f.request(`/income/${income.id}`, "DELETE", {
+        version: income.version,
+      })
+    ).status,
+    204,
+  );
+  assert.equal(
+    (await f.request("/income", "POST", incomeBody, { key })).status,
+    409,
+  );
+  assert.equal((await f.setup()).preferences.currencyLocked, 1);
+});
+
+test("monthly summaries share exact dated events, include old-purchase refunds and isolate owners", async (t) => {
+  const f = await fixture(t),
+    w = await f.setup();
+  const body = f.values(w.categories[0].id, "25.00");
+  const original = (await (
+    await f.request("/expenses", "POST", body)
+  ).json()) as Expense;
+  const refund = (await (
+    await f.request("/refunds", "POST", {
+      ...body,
+      expenseId: original.id,
+      amount: "5",
+      date: "2026-11-01",
+    })
+  ).json()) as Expense;
+  assert.equal(
+    (
+      await f.request("/income", "POST", {
+        ...body,
+        amount: "100",
+        date: "2026-11-02",
+      })
+    ).status,
+    201,
+  );
+  const report = await (await f.request("/summary?month=2026-11")).json();
+  assert.deepEqual(report.totals, {
+    expensesMinor: 0,
+    refundsMinor: 500,
+    incomeMinor: 10000,
+    netMinor: -500,
+    differenceMinor: 10500,
+    count: 2,
+  });
+  assert.equal(report.previous.netMinor, 2500);
+  assert.equal(report.categories[0].netMinor, -500);
+  assert.equal(
+    report.days.reduce(
+      (sum: number, day: { differenceMinor: number }) =>
+        sum + day.differenceMinor,
+      0,
+    ),
+    report.totals.differenceMinor,
+  );
+  assert.equal(
+    (
+      await f.request(`/refunds/${refund.id}`, "PATCH", {
+        ...body,
+        expenseId: original.id,
+        amount: "6",
+        date: "2026-11-01",
+        version: 1,
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (await (await f.request("/summary?month=2026-11")).json()).totals
+      .refundsMinor,
+    600,
+  );
+  const other = await f.signup("summary-other@example.com");
+  await f.setup("GBP", other);
+  assert.equal(
+    (
+      await (
+        await f.request("/summary?month=2026-11", "GET", undefined, {
+          cookie: other,
+        })
+      ).json()
+    ).totals.count,
+    0,
+  );
+  assert.equal((await f.request("/summary?month=1900-01")).status, 200);
+  assert.equal(
+    (await (await f.request("/summary?month=2000-02")).json()).to,
+    "2000-02-29",
+  );
+  assert.equal(
+    (await (await f.request("/summary?month=2100-02")).json()).to,
+    "2100-02-28",
+  );
+  for (const month of ["2026-13", "2026-1", "bad", "2200-01"])
+    assert.equal((await f.request(`/summary?month=${month}`)).status, 400);
+});
+
+test("monthly budgets support zero, safe retries, versioned removal and private independent category limits", async (t) => {
+  const f = await fixture(t),
+    w = await f.setup();
+  const body = {
+    month: "2026-10",
+    scope: "",
+    currency: "GBP",
+    amount: "10",
+    version: 0,
+  };
+  let response = await f.request("/budgets", "PUT", body);
+  assert.equal(response.status, 200, await response.clone().text());
+  let data = await response.json();
+  assert.equal(data.items[0].limitMinor, 1000);
+  assert.equal(data.items[0].version, 1);
+  assert.equal((await f.request("/budgets", "PUT", body)).status, 200);
+  assert.equal(
+    (await f.request("/budgets", "PUT", { ...body, amount: "11" })).status,
+    409,
+  );
+  assert.equal((await f.setup()).preferences.currencyLocked, 1);
+  assert.equal(
+    (await f.request("/workspace", "PUT", { currency: "USD", timezone: "UTC" }))
+      .status,
+    409,
+  );
+  assert.equal(
+    (await f.request("/budgets", "PUT", { ...body, amount: "0", version: 1 }))
+      .status,
+    200,
+  );
+  const original = (await (
+    await f.request("/expenses", "POST", f.values(w.categories[0].id, "5"))
+  ).json()) as Expense;
+  data = await (await f.request("/budgets?month=2026-10")).json();
+  assert.equal(data.items[0].spentMinor, 500);
+  assert.equal(data.summary.totals.netMinor, 500);
+  assert.equal(data.items[0].limitMinor, 0);
+  response = await f.request("/budgets", "PUT", {
+    ...body,
+    scope: w.categories[0].id,
+    amount: "20",
+  });
+  data = await response.json();
+  assert.equal(data.items[0].limitMinor, 0);
+  assert.equal(
+    data.items.find(
+      (item: { scope: string }) => item.scope === w.categories[0].id,
+    ).limitMinor,
+    2000,
+  );
+  await f.request("/refunds", "POST", {
+    ...f.values(w.categories[0].id, "2"),
+    expenseId: original.id,
+  });
+  data = await (await f.request("/budgets?month=2026-10")).json();
+  assert.equal(data.items[0].spentMinor, 300);
+  response = await f.request("/budgets", "PUT", {
+    ...body,
+    amount: null,
+    version: 2,
+  });
+  data = await response.json();
+  assert.equal(data.items[0].limitMinor, null);
+  assert.equal(data.items[0].version, 3);
+  assert.equal((await f.request("/budgets", "PUT", body)).status, 409);
+  assert.equal(
+    (await (await f.request("/budgets?month=2026-11")).json()).items[0]
+      .limitMinor,
+    null,
+  );
+  for (const amount of ["-1", "0.000", "1.001", "NaN", "10000000000"])
+    assert.equal(
+      (await f.request("/budgets", "PUT", { ...body, amount, version: 3 }))
+        .status,
+      400,
+    );
+  assert.equal(
+    (
+      await f.request("/budgets", "PUT", {
+        ...body,
+        currency: "USD",
+        version: 3,
+      })
+    ).status,
+    409,
+  );
+  const other = await f.signup("budget-other@example.com");
+  await f.setup("GBP", other);
+  assert.equal(
+    (
+      await f.request(
+        "/budgets",
+        "PUT",
+        { ...body, scope: w.categories[0].id },
+        { cookie: other },
+      )
+    ).status,
+    404,
+  );
+  data = await (
+    await f.request("/budgets?month=2026-10", "GET", undefined, {
+      cookie: other,
+    })
+  ).json();
+  assert.equal(data.items[0].limitMinor, null);
+  assert.equal(data.items[0].spentMinor, 0);
+});
+
+test("CSV exports are private, cover every filtered page and neutralize spreadsheet formulas", async (t) => {
+  const f = await fixture(t),
+    w = await f.setup();
+  const body = {
+    ...f.values(w.categories[0].id, "25"),
+    merchant: "=SUM(1,2)",
+    note: ' \t@formula\nA "quoted", note',
+  };
+  const original = (await (
+    await f.request("/expenses", "POST", body)
+  ).json()) as Expense;
+  await f.request("/refunds", "POST", {
+    ...body,
+    amount: "5",
+    expenseId: original.id,
+    date: "2026-11-01",
+  });
+  await f.request("/income", "POST", {
+    ...body,
+    amount: "100",
+    date: "2026-11-01",
+  });
+  let response = await f.request("/export", "POST", {
+    kind: "all",
+    filters: { from: "2026-11-01", to: "2026-11-30" },
+  });
+  assert.equal(response.status, 200, await response.clone().text());
+  assert.match(response.headers.get("content-type") || "", /text\/csv/);
+  assert.match(response.headers.get("cache-control") || "", /no-store/);
+  let csv = await response.text();
+  assert.ok(csv.includes('"refund"'));
+  assert.ok(csv.includes('"income"'));
+  assert.ok(!csv.includes('"expense"'));
+  assert.ok(csv.includes('"\'=SUM(1,2)"'));
+  assert.ok(csv.includes('"\'@formula\nA ""quoted"", note"'));
+  assert.ok(csv.includes("-5.00,0.00"));
+  assert.ok(csv.includes("0.00,100.00"));
+  assert.ok(csv.includes(original.id));
+  const other = await f.signup("csv-other@example.com");
+  await f.setup("GBP", other);
+  csv = await (
+    await f.request("/export", "POST", { kind: "all" }, { cookie: other })
+  ).text();
+  assert.ok(!csv.includes(original.id));
+  for (let index = 0; index < 26; index++)
+    assert.equal(
+      (
+        await f.request("/expenses", "POST", {
+          ...body,
+          merchant: "Export pagination",
+          amount: "0.01",
+        })
+      ).status,
+      201,
+    );
+  response = await f.request("/export", "POST", {
+    kind: "expense",
+    filters: { q: "Export pagination", page: 2 },
+  });
+  csv = await response.text();
+  assert.equal((csv.match(/"Export pagination"/g) || []).length, 26);
+  assert.equal(
+    (await f.request("/export", "POST", { kind: ["expense"] })).status,
+    400,
+  );
+  assert.equal(
+    (await f.request("/export", "POST", { kind: "all", filters: [] })).status,
+    400,
+  );
+  assert.equal(
+    (await f.request("/export", "POST", { kind: "all" }, { cookie: "" }))
+      .status,
+    401,
+  );
+  assert.equal(
+    (
+      await f.request(
+        "/export",
+        "POST",
+        { kind: "all" },
+        { origin: "https://elsewhere.example" },
+      )
+    ).status,
+    403,
+  );
+});
+
+test("online backups preserve accounts, entries and budgets and never replace existing files", async (t) => {
+  const f = await fixture(t),
+    w = await f.setup();
+  await f.request("/expenses", "POST", f.values(w.categories[0].id));
+  await f.request("/income", "POST", {
+    ...f.values(w.categories[0].id),
+    amount: "100",
+  });
+  await f.request("/budgets", "PUT", {
+    month: "2026-10",
+    scope: "",
+    currency: "GBP",
+    amount: "50",
+    version: 0,
+  });
+  const destination = join(
+    f.config.databasePath,
+    "..",
+    "backups",
+    "restored-copy.sqlite",
+  );
+  await backupDatabase(f.config.databasePath, destination);
+  const restored = new Database(destination, {
+    readonly: true,
+    fileMustExist: true,
+  });
+  try {
+    assert.equal(restored.pragma("quick_check", { simple: true }), "ok");
+    assert.equal(
+      (
+        restored.prepare("SELECT COUNT(*) AS count FROM user").get() as {
+          count: number;
+        }
+      ).count,
+      1,
+    );
+    assert.equal(
+      (restored.prepare("SELECT amountMinor FROM expenses").get() as Expense)
+        .amountMinor,
+      1234,
+    );
+    assert.equal(
+      (
+        restored
+          .prepare("SELECT amountMinor FROM cash_entries")
+          .get() as Expense
+      ).amountMinor,
+      10000,
+    );
+    assert.equal(
+      (
+        restored.prepare("SELECT limitMinor FROM monthly_budgets").get() as {
+          limitMinor: number;
+        }
+      ).limitMinor,
+      5000,
+    );
+    assert.deepEqual(restored.pragma("foreign_key_check"), []);
+  } finally {
+    restored.close();
+  }
+  await assert.rejects(backupDatabase(f.config.databasePath, destination));
+  await assert.rejects(
+    backupDatabase(f.config.databasePath, f.config.databasePath),
+  );
+});
+
+test("payment filters agree across expense, income and CSV scopes", async (t) => {
+  const f = await fixture(t),
+    w = await f.setup();
+  const body = f.values(w.categories[0].id, "5");
+  for (const path of ["/expenses", "/income"]) {
+    await f.request(path, "POST", {
+      ...body,
+      paymentMethod: "Card",
+      merchant: "Card entry",
+    });
+    await f.request(path, "POST", {
+      ...body,
+      paymentMethod: "Cash",
+      merchant: "Cash entry",
+    });
+    const list = await (
+      await f.request(`${path}/search`, "POST", { payment: "Cash" })
+    ).json();
+    assert.equal(list.total, 1);
+    assert.equal(list.totalMinor, 500);
+    assert.equal(list.items[0].merchant, "Cash entry");
+    assert.equal(
+      (await f.request(`${path}/search`, "POST", { payment: "Invalid" }))
+        .status,
+      400,
+    );
+  }
+  const csv = await (
+    await f.request("/export", "POST", {
+      kind: "all",
+      filters: { payment: "Cash" },
+    })
+  ).text();
+  assert.ok(csv.includes("Cash entry"));
+  assert.ok(!csv.includes("Card entry"));
 });
