@@ -116,3 +116,6 @@ Completed feature milestones are committed and pushed to the GitHub repository o
 Income and refunds have the same create, get, search, edit and versioned delete APIs as expenses under `/api/income` and `/api/refunds`. Income has no expense category. Refund bodies include `expenseId` for an owned purchase; cumulative refunds cannot exceed that purchase or predate it. Refunded purchases cannot be deleted until refunds are removed. Changing a purchase amount/date must remain consistent with its refunds. Currency is locked after the first entry of any kind.
 
 `PATCH /api/categories/:id` accepts the current `version`, optional `name`, and optional boolean `archived`. Rename preserves references across history; archive excludes new selection, preserves existing entries, and can be reversed. Starter categories are seeded once, so renamed defaults do not reappear.
+
+
+`GET /api/summary?month=YYYY-MM` returns owner-scoped totals, previous-month totals, category spending and dated event totals. Refunds affect the month of their recorded date; the income-minus-spending figure is not an account balance. Supported report months are January 1900 through December 2199.

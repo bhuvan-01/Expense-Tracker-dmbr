@@ -653,3 +653,89 @@ test("income, linked partial refunds and archived categories retain private cons
   );
   assert.equal((await f.setup()).preferences.currencyLocked, 1);
 });
+
+test("monthly summaries share exact dated events, include old-purchase refunds and isolate owners", async (t) => {
+  const f = await fixture(t),
+    w = await f.setup();
+  const body = f.values(w.categories[0].id, "25.00");
+  const original = (await (
+    await f.request("/expenses", "POST", body)
+  ).json()) as Expense;
+  const refund = (await (
+    await f.request("/refunds", "POST", {
+      ...body,
+      expenseId: original.id,
+      amount: "5",
+      date: "2026-11-01",
+    })
+  ).json()) as Expense;
+  assert.equal(
+    (
+      await f.request("/income", "POST", {
+        ...body,
+        amount: "100",
+        date: "2026-11-02",
+      })
+    ).status,
+    201,
+  );
+  const report = await (await f.request("/summary?month=2026-11")).json();
+  assert.deepEqual(report.totals, {
+    expensesMinor: 0,
+    refundsMinor: 500,
+    incomeMinor: 10000,
+    netMinor: -500,
+    differenceMinor: 10500,
+    count: 2,
+  });
+  assert.equal(report.previous.netMinor, 2500);
+  assert.equal(report.categories[0].netMinor, -500);
+  assert.equal(
+    report.days.reduce(
+      (sum: number, day: { differenceMinor: number }) =>
+        sum + day.differenceMinor,
+      0,
+    ),
+    report.totals.differenceMinor,
+  );
+  assert.equal(
+    (
+      await f.request(`/refunds/${refund.id}`, "PATCH", {
+        ...body,
+        expenseId: original.id,
+        amount: "6",
+        date: "2026-11-01",
+        version: 1,
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (await (await f.request("/summary?month=2026-11")).json()).totals
+      .refundsMinor,
+    600,
+  );
+  const other = await f.signup("summary-other@example.com");
+  await f.setup("GBP", other);
+  assert.equal(
+    (
+      await (
+        await f.request("/summary?month=2026-11", "GET", undefined, {
+          cookie: other,
+        })
+      ).json()
+    ).totals.count,
+    0,
+  );
+  assert.equal((await f.request("/summary?month=1900-01")).status, 200);
+  assert.equal(
+    (await (await f.request("/summary?month=2000-02")).json()).to,
+    "2000-02-29",
+  );
+  assert.equal(
+    (await (await f.request("/summary?month=2100-02")).json()).to,
+    "2100-02-28",
+  );
+  for (const month of ["2026-13", "2026-1", "bad", "2200-01"])
+    assert.equal((await f.request(`/summary?month=${month}`)).status, 400);
+});

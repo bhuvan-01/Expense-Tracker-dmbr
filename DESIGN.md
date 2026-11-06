@@ -127,3 +127,8 @@ Controls use 8px radii, content surfaces 12px. Avoid making every number a separ
 ### Income, refunds and category maintenance
 
 Shared entry forms, histories and delete dialogs own expense, income and refund flows. Text labels distinguish the entry kinds. A wrapping navigation row provides working destinations; Manage categories opens a native modal with versioned rename/archive/restore controls. Archived labels remain in history and filters. Refund forms name the original purchase and remaining refundable amount. Existing CSS tokens own all styling; platform date/select popups remain native.
+
+
+### Monthly overview
+
+`MonthlyOverview.tsx` owns a four-column definition list, a distinct income-minus-spending panel and an equivalent category table. It uses the shared semantic theme, native month input, and two-column metric reflow on phones. Category tables scroll inside their own container. No bank-balance claim or fabricated budget appears.

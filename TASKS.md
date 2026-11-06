@@ -7,7 +7,7 @@ Complete and verify one milestone before starting the next. Commit and push each
 | 1 | Signup, sign-in, sessions, protected workspace, sign-out | Complete — delivered on `codex/signup-signin` |
 | 2 | Expense entry/history, edit/delete, starter/custom categories, filters and ownership checks | Complete — delivered on `codex/expense-entry` |
 | 3 | Income, refunds and category rename/archive | Complete |
-| 4 | Monthly overview using one shared calculation service | Planned |
+| 4 | Monthly overview using one shared calculation service | Complete |
 | 5 | Overall and category budgets | Planned |
 | 6 | Reports and CSV export | Planned |
 | 7 | Email verification/recovery, production privacy/data controls, launch checks | Required before public launch |
@@ -42,3 +42,8 @@ Verification on 5 November 2026: 22 backend/domain/design tests and 8 Chrome bro
 Income CRUD, linked partial refunds, immutable refund ownership/linkage, category rename/archive/restore, and migration-safe starter category seeding implemented. Existing auth and expense workflows retained. Work lives in an isolated checkout to preserve the separate uncommitted bill-support prototype.
 
 Verification: 23 backend/domain/design tests, 8 Chrome browser journeys, production build/typecheck, formatting and strict UI contract audit. Income/refund/category flows are included in the desktop journey; previous private-data, retry, conflict and mobile coverage remains.
+
+
+## Milestone 4 — 6 November 2026
+
+Owner-scoped monthly overview uses one shared dated-event calculation service. Exact income, expenses, refunds, net spending and income minus net spending agree with category/day breakdowns. Includes previous-month comparison, native month selection and empty/loading/error/retry states. Refunds of older purchases affect the refund month.

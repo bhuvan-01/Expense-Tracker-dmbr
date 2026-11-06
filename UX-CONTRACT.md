@@ -123,3 +123,8 @@ Authentication test sources: `tests/auth.test.ts`, `tests/e2e/auth.spec.ts`, and
 ## Implemented money-entry rules
 
 Income uses positive exact minor units without an expense category. Refunds must reference an owned purchase, cannot predate it or cumulatively exceed it, and remain attached on edit. The server blocks deleting refunded purchases or changing their amount/date incompatibly. Expenses display gross totals; refunds reduce net spending in their own recorded period. Category rename updates historical labels; archive hides new selection while allowing edits to historical entries. Category modal has busy, error, success and dirty-exit states.
+
+
+## Monthly overview implementation
+
+`server/summary.ts` owns all dated-event totals. Month selection cancels superseded reads and clears old figures until the selected month loads. Previous-period comparison uses calendar months. Refunds are positive receipts that reduce net spending in their own month; the difference is recorded income minus net spending, never a bank balance. Empty months show zero totals with explicit guidance; failures offer retry. Category tables expose the exact values without relying on graphics.

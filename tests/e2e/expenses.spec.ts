@@ -198,6 +198,28 @@ test("desktop setup, expense CRUD, category creation, search, filters and totals
   await expect(
     page.getByRole("row").filter({ hasText: "Corner market" }),
   ).toContainText("Food shopping");
+  await page.getByRole("button", { name: "Overview", exact: true }).click();
+  await page.getByLabel("Overview month", { exact: true }).fill("2026-11");
+  await expect(page.locator(".monthly-difference")).toContainText("£2,005.50");
+  await expect(page.locator(".summary-grid")).toContainText("-£5.50");
+  await page.getByLabel("Overview month", { exact: true }).fill("2026-10");
+  await expect(page.locator(".summary-grid")).toContainText("£15.50");
+  await a11y(page);
+  await page.screenshot({
+    path: ".data/monthly-overview-desktop.png",
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 360, height: 780 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await a11y(page);
+  await page.screenshot({
+    path: ".data/monthly-overview-phone.png",
+    fullPage: true,
+  });
 });
 
 test("phone forms preserve input and retry a lost successful save without duplicates", async ({

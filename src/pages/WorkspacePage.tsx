@@ -11,6 +11,7 @@ import { Brand } from "../components/Brand";
 import { authClient } from "../lib/auth-client";
 import { api } from "../lib/api";
 import { entryLabels, type EntryKind, type MoneyEntry } from "../lib/entries";
+import { MonthlyOverview } from "../components/MonthlyOverview";
 import { CategoryManager } from "../components/CategoryManager";
 import type { Category, Expense, Workspace } from "../lib/ledger";
 import { WorkspaceSetup } from "../components/WorkspaceSetup";
@@ -30,7 +31,7 @@ export function WorkspacePage() {
   const [pending, setPending] = useState(false),
     [attempt, setAttempt] = useState(0),
     [revision, setRevision] = useState(0);
-  const [view, setView] = useState<EntryKind>("expense");
+  const [view, setView] = useState<EntryKind | "overview">("expense");
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [editor, setEditor] = useState<{
       expense: MoneyEntry | null;
@@ -247,6 +248,16 @@ export function WorkspacePage() {
                   </span>
                 </div>
                 <nav className="ledger-navigation" aria-label="Your ledger">
+                  <button
+                    type="button"
+                    aria-current={view === "overview" ? "page" : undefined}
+                    onClick={() => {
+                      setView("overview");
+                      setNotice("");
+                    }}
+                  >
+                    Overview
+                  </button>
                   {(["expense", "income", "refund"] as const).map((kind) => (
                     <button
                       type="button"
@@ -269,28 +280,32 @@ export function WorkspacePage() {
                     Manage categories
                   </button>
                 </nav>
-                <ExpenseHistory
-                  key={view}
-                  kind={view}
-                  onRefund={(expense) =>
-                    setEditor({
-                      expense: null,
-                      kind: "refund",
-                      refundOf: expense,
-                    })
-                  }
-                  workspace={workspace}
-                  revision={revision}
-                  onAdd={view === "refund" ? () => setView("expense") : add}
-                  onEdit={(expense) => {
-                    setNotice("");
-                    setEditor({ expense, kind: view });
-                  }}
-                  onDelete={(expense) => {
-                    setNotice("");
-                    setDeleting({ expense, kind: view });
-                  }}
-                />
+                {view === "overview" ? (
+                  <MonthlyOverview workspace={workspace} revision={revision} />
+                ) : (
+                  <ExpenseHistory
+                    key={view}
+                    kind={view}
+                    onRefund={(expense) =>
+                      setEditor({
+                        expense: null,
+                        kind: "refund",
+                        refundOf: expense,
+                      })
+                    }
+                    workspace={workspace}
+                    revision={revision}
+                    onAdd={view === "refund" ? () => setView("expense") : add}
+                    onEdit={(expense) => {
+                      setNotice("");
+                      setEditor({ expense, kind: view });
+                    }}
+                    onDelete={(expense) => {
+                      setNotice("");
+                      setDeleting({ expense, kind: view });
+                    }}
+                  />
+                )}
                 <p className="ledger-footnote">
                   Expenses show gross spending. Refunds stay linked to purchases
                   and reduce net spending in their recorded period.
