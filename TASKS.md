@@ -66,3 +66,5 @@ Added an integrity-checked online SQLite backup command, recovery guide and auth
 Personal-use polish also includes native payment-method filters across all histories and CSV, plus backend consistency coverage.
 
 Final local validation: 29 backend/domain/design tests and all 8 Chrome journeys passed (the payment-filter journey was rerun after its import fix); build/typecheck, formatting and strict UI audit passed. Monthly overview, budget and report phone captures were inspected. Existing local database backup passed integrity checks; separate bill-support working changes were preserved.
+
+CI caught a transient navigation contrast issue during a background fade. Navigation now switches text/background together without fading, preserving contrast throughout the state change. The existing browser accessibility journey verifies the final behavior.
