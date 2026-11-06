@@ -1023,9 +1023,7 @@ button:active:not(:disabled) {
 .ledger-filters {
   padding: 0 28px;
   display: grid;
-  grid-template-columns:
-    minmax(220px, 1.8fr) minmax(150px, 1.1fr) minmax(150px, 1fr)
-    minmax(150px, 1fr);
+  grid-template-columns: minmax(220px, 1.6fr) repeat(4, minmax(130px, 1fr));
   gap: 14px;
 }
 .ledger-filters .field {
@@ -1499,7 +1497,8 @@ button:active:not(:disabled) {
     gap: 10px;
   }
   .ledger-filters .history-search,
-  .ledger-filters > .field:nth-child(2) {
+  .ledger-filters > .field:has(#filter-category),
+  .ledger-filters > .field:has(#filter-payment) {
     grid-column: 1 / -1;
   }
   .ledger-filters input {

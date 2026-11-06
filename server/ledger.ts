@@ -4,6 +4,7 @@ import { initializeBudgets } from "./budgets.js";
 import { initializeEntries } from "./entries.js";
 import {
   CURRENCIES,
+  PAYMENT_METHODS,
   STARTER_CATEGORIES,
   isCurrency,
   parseAmount,
@@ -388,6 +389,16 @@ export function createLedger(db: Database.Database) {
         throw new LedgerError(400, "Choose a valid category.");
       clauses.push("e.categoryId = ?");
       args.push(filters.category);
+    }
+    if (filters.payment) {
+      if (
+        !PAYMENT_METHODS.includes(
+          filters.payment as (typeof PAYMENT_METHODS)[number],
+        )
+      )
+        throw new LedgerError(400, "Choose a valid payment method.");
+      clauses.push("e.paymentMethod = ?");
+      args.push(String(filters.payment));
     }
     if (q) {
       const pattern = `%${q.replace(/[\\%_]/g, "\\$&")}%`;

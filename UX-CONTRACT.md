@@ -138,3 +138,6 @@ Monthly overall/category caps are independent, use the same net-spending calcula
 ## Reports and export implementation
 
 Reports reuse the overview calculation service and expose daily/month totals. CSV export uses exact money strings, positive entry amounts plus explicit signed net-spending effects, type and original-purchase linkage. Exports include all matching pages, at most 10,000 entries, with server-owned account isolation, origin/session checks, no-store responses and spreadsheet-formula escaping. History exports snapshot the current visible search/filter scope. Busy exports do not claim completion until a blob is received; status says download started, because browser disk persistence is outside the app. Monthly selectors are locked while exporting to avoid ambiguous scope.
+
+
+Payment-method filtering shares one server-validated scope across histories and CSV exports, using the native SelectField control. Home redirects are session-aware and never cached.

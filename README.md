@@ -1,6 +1,6 @@
 # Expense Tracker
 
-A personal expense tracker, built feature by feature. Signup/sign-in and the first expense-ledger milestone are implemented: record, review, edit, filter and delete your own expenses.
+A personal expense tracker with private accounts, expense/income/refund entry, category management, monthly overview, budgets, daily reports, CSV exports and verified database backups. The core is ready for personal use; public-launch email/privacy/deployment requirements remain open.
 
 ## Run locally
 
@@ -24,6 +24,10 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'
 Put the generated value in `BETTER_AUTH_SECRET`. `BETTER_AUTH_URL` must match the origin used in the browser, including the port. Set `PORT` consistently when changing it. Changing the secret can invalidate existing sessions.
 
 ## Implemented
+
+- Income and linked partial refunds, category rename/archive/restore, monthly overview and prior-month comparison.
+- Monthly overall/category budgets with zero/unset limits, exact remaining/over amounts and conflict protection.
+- Daily monthly reports, filtered/monthly CSV export across pages, and online database backup/recovery guidance.
 
 - Responsive signup and sign-in screens, shared accessible fields, local fonts, and password visibility controls.
 - Name/email/password validation, 12–128 character signup passwords, and confirmation matching.
@@ -66,7 +70,7 @@ All endpoints require a valid session. Mutations/search require `Content-Type: a
 | Endpoint | Behavior |
 |---|---|
 | `GET /api/workspace` | Current preferences and private categories |
-| `PUT /api/workspace` | Confirm currency/timezone; currency changes rejected after the first expense |
+| `PUT /api/workspace` | Confirm currency/timezone; currency changes rejected after the first entry or saved budget |
 | `POST /api/categories` | Create or reuse a category name in this workspace |
 | `GET /api/expenses` | Paginated list with safe date/category/sort/page parameters |
 | `POST /api/expenses/search` | Same list with private search text in a JSON body |
@@ -125,3 +129,6 @@ Income and refunds have the same create, get, search, edit and versioned delete 
 
 
 `POST /api/export` accepts `kind` (`all`, `expense`, `income`, `refund`) and optional `filters` using history date/category/search/sort parameters. CSV includes all matching pages (maximum 10,000 entries); narrow dates when larger. It includes record type, original purchase ID, positive amount, signed net-spending effect and income received. User-controlled text is escaped against spreadsheet formulas; export is intended for review, not lossless reimport. CSV contains personal financial data: store downloaded copies privately. The Reports screen exports all entry types for the chosen month.
+
+
+See [Personal-use guide and backup/recovery](PERSONAL_USE.md). Run `npm run db:backup` to create a new integrity-checked online SQLite snapshot in the ignored `.data/backups/` directory. Keep the authentication secret separately and store backup copies privately off-device.

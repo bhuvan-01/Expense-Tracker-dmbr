@@ -69,6 +69,9 @@ test("desktop setup, expense CRUD, category creation, search, filters and totals
   await page.getByRole("button", { name: "Save expense", exact: true }).click();
   await expect(page.getByLabel("Amount (GBP)", { exact: true })).toBeFocused();
   await fillExpense(page, "Corner market");
+  await page
+    .getByLabel("Payment method (optional)", { exact: true })
+    .selectOption("Card");
   await page.getByLabel("Note (optional)").fill("Keep this search private");
   await a11y(page);
   await page.getByRole("button", { name: "Save expense", exact: true }).click();
@@ -105,6 +108,9 @@ test("desktop setup, expense CRUD, category creation, search, filters and totals
   ).not.toHaveValue("");
   await page.getByRole("button", { name: "Save expense", exact: true }).click();
   await expect(page.locator(".history-total")).toContainText("£20.00");
+  await page.getByLabel("Payment method", { exact: true }).selectOption("Card");
+  await expect(page.locator(".history-total")).toContainText("£15.50");
+  await page.getByLabel("Payment method", { exact: true }).selectOption("");
   await page.getByLabel("Search expenses").fill("search private");
   await expect(
     page.getByRole("row").filter({ hasText: "Pet shop" }),

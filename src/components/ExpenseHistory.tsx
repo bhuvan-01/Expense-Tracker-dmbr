@@ -14,6 +14,7 @@ import {
 import { downloadCsv } from "../lib/download";
 import { api, ApiError } from "../lib/api";
 import {
+  PAYMENT_METHODS,
   dateLabel,
   money,
   type Expense,
@@ -33,13 +34,21 @@ function readFilters(q = ""): ExpenseFilters {
     from: params.get("from") || "",
     to: params.get("to") || "",
     category: params.get("category") || "",
+    payment: params.get("payment") || "",
     sort: params.get("sort") || "date_desc",
     page: Math.max(1, Number(params.get("page")) || 1),
   };
 }
 function writeFilters(filters: ExpenseFilters, replace = false) {
   const params = new URLSearchParams();
-  for (const key of ["from", "to", "category", "sort", "page"] as const)
+  for (const key of [
+    "from",
+    "to",
+    "category",
+    "payment",
+    "sort",
+    "page",
+  ] as const)
     if (
       filters[key] &&
       !(key === "page" && filters.page === 1) &&
@@ -159,7 +168,11 @@ export function ExpenseHistory({
     if (key === "page") focusPage.current = true;
   };
   const active = Boolean(
-    filters.q || filters.category || filters.from || filters.to,
+    filters.q ||
+    filters.category ||
+    filters.payment ||
+    filters.from ||
+    filters.to,
   );
   const clear = () => {
     setQuery("");
@@ -168,6 +181,7 @@ export function ExpenseHistory({
       from: "",
       to: "",
       category: "",
+      payment: "",
       sort: "date_desc",
       page: 1,
     };
@@ -273,6 +287,19 @@ export function ExpenseHistory({
             ))}
           </SelectField>
         )}
+        <SelectField
+          id="filter-payment"
+          label="Payment method"
+          value={filters.payment || ""}
+          onChange={(event) => change("payment", event.target.value)}
+        >
+          <option value="">All payment methods</option>
+          {PAYMENT_METHODS.map((method) => (
+            <option key={method} value={method}>
+              {method}
+            </option>
+          ))}
+        </SelectField>
         <Field
           id="filter-from"
           label="From date"

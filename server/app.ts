@@ -40,6 +40,7 @@ export function createApp(
     req.headers["x-expense-client-ip"] =
       req.ip || req.socket.remoteAddress || "unknown";
     if (
+      req.path === "/" ||
       req.path.startsWith("/api/") ||
       req.path.startsWith("/app") ||
       req.path.startsWith("/sign-")
@@ -71,7 +72,12 @@ export function createApp(
     if (!session) return res.redirect(303, "/sign-in");
     next();
   });
-  app.get("/", (_req, res) => res.redirect(302, "/sign-in"));
+  app.get("/", async (req, res) => {
+    const session = await auth.api.getSession({
+      headers: fromNodeHeaders(req.headers),
+    });
+    return res.redirect(303, session ? "/app" : "/sign-in");
+  });
   if (production) {
     app.use(express.static(resolve("dist"), { index: false }));
     app.get(["/sign-in", "/sign-up", "/app"], (_req, res) =>

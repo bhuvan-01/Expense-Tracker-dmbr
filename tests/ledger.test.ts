@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import Database from "better-sqlite3";
+import { backupDatabase } from "../server/backup.js";
 import { test, type TestContext } from "node:test";
 import { randomBytes, randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -934,4 +936,108 @@ test("CSV exports are private, cover every filtered page and neutralize spreadsh
     ).status,
     403,
   );
+});
+
+test("online backups preserve accounts, entries and budgets and never replace existing files", async (t) => {
+  const f = await fixture(t),
+    w = await f.setup();
+  await f.request("/expenses", "POST", f.values(w.categories[0].id));
+  await f.request("/income", "POST", {
+    ...f.values(w.categories[0].id),
+    amount: "100",
+  });
+  await f.request("/budgets", "PUT", {
+    month: "2026-10",
+    scope: "",
+    currency: "GBP",
+    amount: "50",
+    version: 0,
+  });
+  const destination = join(
+    f.config.databasePath,
+    "..",
+    "backups",
+    "restored-copy.sqlite",
+  );
+  await backupDatabase(f.config.databasePath, destination);
+  const restored = new Database(destination, {
+    readonly: true,
+    fileMustExist: true,
+  });
+  try {
+    assert.equal(restored.pragma("quick_check", { simple: true }), "ok");
+    assert.equal(
+      (
+        restored.prepare("SELECT COUNT(*) AS count FROM user").get() as {
+          count: number;
+        }
+      ).count,
+      1,
+    );
+    assert.equal(
+      (restored.prepare("SELECT amountMinor FROM expenses").get() as Expense)
+        .amountMinor,
+      1234,
+    );
+    assert.equal(
+      (
+        restored
+          .prepare("SELECT amountMinor FROM cash_entries")
+          .get() as Expense
+      ).amountMinor,
+      10000,
+    );
+    assert.equal(
+      (
+        restored.prepare("SELECT limitMinor FROM monthly_budgets").get() as {
+          limitMinor: number;
+        }
+      ).limitMinor,
+      5000,
+    );
+    assert.deepEqual(restored.pragma("foreign_key_check"), []);
+  } finally {
+    restored.close();
+  }
+  await assert.rejects(backupDatabase(f.config.databasePath, destination));
+  await assert.rejects(
+    backupDatabase(f.config.databasePath, f.config.databasePath),
+  );
+});
+
+test("payment filters agree across expense, income and CSV scopes", async (t) => {
+  const f = await fixture(t),
+    w = await f.setup();
+  const body = f.values(w.categories[0].id, "5");
+  for (const path of ["/expenses", "/income"]) {
+    await f.request(path, "POST", {
+      ...body,
+      paymentMethod: "Card",
+      merchant: "Card entry",
+    });
+    await f.request(path, "POST", {
+      ...body,
+      paymentMethod: "Cash",
+      merchant: "Cash entry",
+    });
+    const list = await (
+      await f.request(`${path}/search`, "POST", { payment: "Cash" })
+    ).json();
+    assert.equal(list.total, 1);
+    assert.equal(list.totalMinor, 500);
+    assert.equal(list.items[0].merchant, "Cash entry");
+    assert.equal(
+      (await f.request(`${path}/search`, "POST", { payment: "Invalid" }))
+        .status,
+      400,
+    );
+  }
+  const csv = await (
+    await f.request("/export", "POST", {
+      kind: "all",
+      filters: { payment: "Cash" },
+    })
+  ).text();
+  assert.ok(csv.includes("Cash entry"));
+  assert.ok(!csv.includes("Card entry"));
 });

@@ -68,6 +68,7 @@ export type ExpenseValues = {
 };
 export type ExpenseErrors = Partial<Record<keyof ExpenseValues, string>>;
 export type ExpenseFilters = {
+  payment?: string;
   q: string;
   from: string;
   to: string;

@@ -57,3 +57,12 @@ Monthly overall/category budgets with exact shared spending totals, zero limits,
 ## Milestone 6 — 6 November 2026
 
 Monthly daily reports and CSV downloads for a month or filtered expense/income/refund history. Exact signed spending/income columns, cross-page export, linked purchase IDs, private scopes, formula escaping and download recovery. Phone tables have keyboard-scroll regions and visible hints.
+
+
+## Personal-use readiness — 6 November 2026
+
+Added an integrity-checked online SQLite backup command, recovery guide and authenticated home redirect. Core milestones 1–6 are implemented. Public-launch email verification/recovery, profile/privacy/deletion lifecycle and hosted deployment remain open; personal-use readiness is not a public-launch claim. See PERSONAL_USE.md.
+
+Personal-use polish also includes native payment-method filters across all histories and CSV, plus backend consistency coverage.
+
+Final local validation: 29 backend/domain/design tests and all 8 Chrome journeys passed (the payment-filter journey was rerun after its import fix); build/typecheck, formatting and strict UI audit passed. Monthly overview, budget and report phone captures were inspected. Existing local database backup passed integrity checks; separate bill-support working changes were preserved.

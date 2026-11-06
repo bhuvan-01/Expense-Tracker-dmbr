@@ -46,7 +46,7 @@ components:
 
 ## Overview
 
-Design direction seeded on 28 October 2026; authentication screens implemented on 4 November 2026; expense ledger implemented on 5 November 2026. Income, budget, and reporting screens remain planned. User preferences may revise the proposal.
+Design direction seeded on 28 October 2026; authentication screens implemented on 4 November 2026; expense ledger implemented on 5 November 2026. Income, refund, overview, budget and reporting screens implemented on 6 November 2026. User preferences may revise the proposal.
 
 The reference is the useful order of a personal ledger: aligned figures, clear dates, concise categories, and enough space to correct an entry comfortably. The audience is an individual recording daily spending on a phone and reviewing a month on a larger screen. This is a product interface; the public launch page uses the same identity with lower information density.
 
@@ -142,3 +142,6 @@ Shared entry forms, histories and delete dialogs own expense, income and refund 
 ### Reports and data downloads
 
 `Reports.tsx` owns native month selection, a daily report table with exact monthly totals and a CSV download action. `ExpenseHistory.tsx` exports every matching row across pages. Table regions are named/focusable for horizontal keyboard scrolling, with visible instructions. Export progress/errors/success use the shared status language. Budgets initially show overall, configured and used categories; Show all categories reveals remaining choices.
+
+
+Payment method uses the shared native select and filter layout, with full-width phone category/payment controls. All additions preserve runtime theme ownership.

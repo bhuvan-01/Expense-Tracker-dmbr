@@ -310,6 +310,16 @@ export function cashEntries(db: Database.Database) {
       clauses.push("e.categoryId = ?");
       args.push(String(filters.category));
     }
+    if (filters.payment) {
+      if (
+        !PAYMENT_METHODS.includes(
+          filters.payment as (typeof PAYMENT_METHODS)[number],
+        )
+      )
+        throw new LedgerError(400, "Choose a valid payment method.");
+      clauses.push("a.paymentMethod = ?");
+      args.push(String(filters.payment));
+    }
     if (q) {
       clauses.push(
         "(a.merchant LIKE ? ESCAPE '\\' OR a.note LIKE ? ESCAPE '\\' OR c.name LIKE ? ESCAPE '\\')",
